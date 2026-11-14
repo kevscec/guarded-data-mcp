@@ -2,9 +2,9 @@
 
 Status: development sequence based on accepted ADRs 0001–0010. Q26–Q28 accepted the initial types/rules, full-version approach and input ceilings. Repository identity is accepted: `kevscec/guarded-data-mcp`, MIT, author Kevin Ceciliano Gamboa with GitHub noreply email. Auxiliary defaults in [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) remain explicit technical-validation work.
 
-Progress: M0 foundation is published and its initial Windows/Linux CI passed. M1 and subsequent functional milestones are not started. The public repository is [kevscec/guarded-data-mcp](https://github.com/kevscec/guarded-data-mcp).
+Progress: M0 foundation is published. M1 import/inspection and its deterministic evaluation are implemented with local behavioral/protocol evidence. CI runs that suite on Windows and Ubuntu on every push. M2–M8 are not started. The public repository is [kevscec/guarded-data-mcp](https://github.com/kevscec/guarded-data-mcp).
 
-The sequence uses deliverables and dependencies, not a calendar. Every functional milestone includes its own evaluation cases; the harness is not deferred to the end. Internal module/package names below are proposed paths, not final branding.
+The sequence uses deliverables and dependencies, not a calendar. Every functional milestone includes its own evaluation cases; the harness is not deferred to the end. The map below describes target responsibilities. M1 keeps these in focused modules (`domain.py`, `storage.py`, `codec.py`, `ingest.py`, `services.py`, `server.py`, `__main__.py`) rather than creating empty subpackages for future work.
 
 ## Repository map
 
@@ -54,10 +54,10 @@ Deliver: explicit contract parser, source preservation, initial SQLite version, 
 
 Acceptance:
 
-- [ ] A tiny fixture is imported and inspected through actual MCP requests; the contract and version match the CLI view.
-- [ ] Original bytes/hash and row multiplicity survive; text IDs and null/empty distinctions match the declared supported schema.
-- [ ] Unknown datasets, incompatible types and exceeded input limits produce explicit failures with no registered partial dataset.
-- [ ] Stdout contains only MCP protocol output; CI runs this slice without network/model access.
+- [x] A tiny fixture is imported and inspected through actual MCP requests; the contract and version match the CLI view.
+- [x] Original bytes/hash and row multiplicity survive; text IDs and null/empty distinctions match the declared supported schema.
+- [x] Unknown datasets, incompatible types and exceeded input limits produce explicit failures with no registered partial dataset.
+- [x] Actual stdio sessions pass using automatic and legacy negotiation. CI runs the same slice without network/model access. Publication is complete only after verifying the pushed revision's remote CI result.
 
 ## M2 — Investigate quality with bounded evidence
 

@@ -2,7 +2,7 @@
 
 An MCP server project for controlled local data repair: an agent investigates a dataset and proposes changes, while a human approves an exact plan and the server enforces its permitted effects.
 
-**Status: foundation and accepted design. Repair tools are under development.** The repository currently contains the architecture decisions, technical specification, development plan, isolated dependency baseline and documentation checks. No completed repair workflow or evaluation results are claimed yet.
+**Status: M1 import/inspection slice implemented.** Import CSV/Parquet through a human CLI, preserve the source and typed version in SQLite, then inspect it through two real MCP tools. Deterministic tests and a real stdio evaluation harness are included. Quality rules, repair/approval execution and real-agent evaluations remain later milestones.
 
 ## The problem
 
@@ -21,18 +21,31 @@ This project chooses a bounded repair surface and explicit human authority. Its 
 
 The stated trust boundary is an agent limited to the exposed MCP tools. It does not establish protection against an agent with unrestricted access to the host operating system.
 
-## Planned tool surface
+## Tool surface and implementation status
 
-| Tool | Responsibility |
-| --- | --- |
-| `list_datasets` | Discover registered datasets. |
-| `inspect_dataset` | Inspect contracts, versions, profiles and findings. |
-| `query_records` | Investigate bounded records with structured filters. |
-| `prepare_plan` | Simulate and persist an exact repair/restoration proposal. |
-| `get_plan` | Inspect approval, execution and persisted outcome. |
-| `apply_plan` | Apply the approved plan without changing its instructions. |
+| Tool | Responsibility | Status |
+| --- | --- | --- |
+| `list_datasets` | Discover registered datasets with bounded pagination. | Implemented |
+| `inspect_dataset` | Inspect contracts, provenance and full null profiles. | Implemented; quality rules not evaluated |
+| `query_records` | Investigate bounded records with structured filters. | Planned M2 |
+| `prepare_plan` | Simulate and persist an exact repair/restoration proposal. | Planned M3 |
+| `get_plan` | Inspect approval, execution and persisted outcome. | Planned M3/M4 |
+| `apply_plan` | Apply the approved plan without changing its instructions. | Planned M4 |
 
-There is no agent-side approval tool. Tool names above describe the accepted design, not endpoints already available in this foundation commit.
+There is no agent-side import or approval tool. The M1 server registers only the two implemented read tools. Inspection explicitly returns `quality_status: not_evaluated` rather than treating a successful profile as proof of clean data.
+
+## Try the first slice
+
+```sh
+uv sync --locked
+uv run python -m evals.runner
+```
+
+This self-contained evaluation imports synthetic data through the human CLI, starts the actual stdio server, checks output schemas and expected refusals, and compares the entire persisted dataset against an independent expected result. It preserves duplicates, leading-zero IDs, exact decimals and null versus empty text. It uses no model or network data.
+
+Follow the [M1 walkthrough](docs/m1-walkthrough.md) to review/import a dataset and connect a client.
+
+The [recorded M1 results](docs/evals/m1-results.json) contain nine passing deterministic cases in each of two negotiated protocol modes: automatic (`2026-07-28`) and legacy (`2025-11-25`), using the pinned SDK. These results do not certify other clients or an agent's decisions.
 
 ## Development
 
@@ -43,9 +56,11 @@ uv sync --locked
 uv run python scripts/check_docs.py
 uv run ruff check .
 uv run ruff format --check .
+uv run python -m pytest -q
+uv run python -m evals.runner --mode legacy
 ```
 
-CI runs these foundation checks and verifies runtime imports on Windows and Linux. Functional tests and the deterministic evaluation runner enter with the first runnable import/inspection slice; a successful foundation check is not a passing product evaluation.
+CI runs documentation/lint/format checks and behavioral tests on Windows and Ubuntu. The protocol tests run the evaluation harness with the pinned SDK's automatic and legacy negotiation modes. They are deterministic protocol evaluations, not real-agent runs. Desktop host products are not yet individually certified.
 
 ## Decisions and delivery
 
@@ -55,7 +70,7 @@ CI runs these foundation checks and verifies runtime imports on Windows and Linu
 - [Glossary](GLOSSARY.md): domain terminology.
 - [Discovery context](DISCOVERY.md): how the accepted scope emerged.
 
-The public demonstration will use a pinned, minimized NYC 311 sample and clearly labeled synthetic defect variants. It is not downloaded or distributed by this foundation. Source terms and provenance must accompany any future external data; the code license does not relicense that data.
+The public demonstration will use a pinned, minimized NYC 311 sample and clearly labeled synthetic defect variants. NYC data is not yet distributed; M1 fixtures are project-authored synthetic records. Source terms and provenance must accompany any future external data; the code license does not relicense that data.
 
 ## License
 

@@ -1,6 +1,6 @@
 # Technical specification — controlled data repair MCP
 
-Status: implementation specification in progress. ADRs 0001–0010 are accepted. Q26–Q28 accepted the closed quality rules, finite float64 support, complete versions and combined source/row/column/cell ceilings. Detailed codecs, schemas and auxiliary operational defaults still require technical validation. The public repository/environment foundation is established; repair tools are not implemented yet.
+Status: M1 import/inspection implemented under ADRs 0001–0011. Q26–Q28 accepted the closed quality rules, finite float64 support, complete versions and combined source/row/column/cell ceilings. M1 codecs and import persistence are tested; query/repair schemas, approval execution and real-agent evaluation remain future work.
 
 ## Approved architecture
 
@@ -38,7 +38,7 @@ Quarantine names the rule/finding and exact affected occurrence IDs; approved br
 
 ## Accepted complete versions and proposed persistence details
 
-For the first implementation, keep complete immutable versions of active records and quarantine inside SQLite, as accepted in ADR-0010. The physical encoding must preserve the logical schema; select it in a small codec/storage spike before creating migrations. Do not move authoritative working data into external Parquet files.
+Complete versions are encoded as Arrow IPC active/quarantine blobs inside SQLite, as recorded in [ADR-0011](docs/adr/0011-store-arrow-ipc-snapshots-in-sqlite.md). M1 registers source bytes, canonical contract and initial typed version atomically. Later repair publication follows the proposed lifecycle below; it is not implemented by the import slice.
 
 Use a dataset head revision that advances on data publication or activated contract/mapping changes. Plans bind this revision, their base data version, contract version, mapping versions and exact proposed effects. Returning to an old content value does not revive an old approval.
 
@@ -96,7 +96,7 @@ The server opens no network port. Logs go to stderr and exclude raw record conte
 
 ## Remaining decisions
 
-Settle codec/physical schema, SDK pins and supported clients with targeted technical spikes. Choose the real-agent adapter and its measured-suite configuration before evaluating it. Repository identity is accepted: `kevscec/guarded-data-mcp`, MIT code license, author Kevin Ceciliano Gamboa using the account's GitHub noreply address. Configure identity locally for this repository only.
+M1 settles IPC version encoding, scalar codecs and the pinned SDK's auto/legacy stdio compatibility. See the [walkthrough](docs/m1-walkthrough.md) for exact CSV/type policies and native-decoder limitations. Next specify M2 rule/query semantics, then repair approval/publication. Choose the real-agent adapter and its measured-suite configuration before evaluating it. Repository identity is `kevscec/guarded-data-mcp`, MIT code license, author Kevin Ceciliano Gamboa using GitHub noreply. Configure identity locally for this repository only.
 
 ## References
 

@@ -20,8 +20,12 @@ dependencies = [
 Repository = "https://github.com/kevscec/guarded-data-mcp"
 Issues = "https://github.com/kevscec/guarded-data-mcp/issues"
 
+[project.scripts]
+guarded-data = "guarded_data_mcp.__main__:main"
+
 [dependency-groups]
 dev = [
+    "jsonschema>=4.26,<5",
     "pytest>=8,<10",
     "ruff>=0.11,<1",
 ]

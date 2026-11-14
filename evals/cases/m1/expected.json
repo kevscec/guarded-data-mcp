@@ -1,0 +1,10 @@
+{
+  "rows": [
+    {"id": "001", "category": "open", "amount": "12.30", "note": ""},
+    {"id": "001", "category": "open", "amount": "12.30", "note": ""},
+    {"id": "002", "category": "closed", "amount": "0.00", "note": null},
+    {"id": "003", "category": "unfamiliar", "amount": "1.00", "note": "\\N"}
+  ],
+  "row_count": 4,
+  "null_counts": {"id": 0, "category": 0, "amount": 0, "note": 1}
+}

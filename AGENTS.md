@@ -20,9 +20,11 @@ uv sync --locked
 uv run python scripts/check_docs.py
 uv run ruff check .
 uv run ruff format --check .
+uv run python -m pytest -q
+uv run python -m evals.runner
 ```
 
-Functional tests and the deterministic evaluation runner start in M1. Once present, run the checks appropriate to the changed behavior, including actual stdio/protocol checks and failure-path oracles. Do not substitute coverage percentages, import checks or scripted tool calls for real-agent evaluation.
+M1 includes functional tests and a deterministic evaluation runner that starts the real stdio subprocess in automatic and legacy modes. Run checks appropriate to changed behavior, including failure-path/full-state oracles. Do not substitute coverage percentages, import checks or scripted tool calls for real-agent evaluation; the separate real-agent suite remains an M7 deliverable.
 
 ## Public evidence and data
 

@@ -1,6 +1,6 @@
 # Project discovery
 
-Status: product, base-stack and initial type/limit decisions recorded in docs/adr/; M0 public foundation is published with passing initial Windows/Linux CI. M1 is next.
+Status: product, base-stack and initial type/limit decisions recorded in docs/adr/; M0 is published and M1 import/inspection is implemented with deterministic protocol evaluations. M2 is next; pushed-revision CI verifies publication readiness.
 
 ## Settled direction
 

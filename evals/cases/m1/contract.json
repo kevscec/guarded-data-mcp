@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "columns": [
+    {"name": "id", "dtype": "text", "nullable": false},
+    {"name": "category", "dtype": "text"},
+    {"name": "amount", "dtype": "decimal128", "precision": 12, "scale": 2},
+    {"name": "note", "dtype": "text"}
+  ],
+  "unique_key": ["id"]
+}

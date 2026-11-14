@@ -16,6 +16,7 @@ These records capture the decisions accepted during discovery for the controlled
 | [0008](0008-use-sqlite-and-pyarrow.md) | Keep authoritative state in SQLite and use PyArrow for interchange | Accepted | 2026-11-13 |
 | [0009](0009-use-closed-rules-and-explicit-scalar-types.md) | Use closed quality rules and explicit scalar types | Accepted | 2026-11-13 |
 | [0010](0010-retain-complete-versions-with-bounds.md) | Retain complete versions within an explicit initial envelope | Accepted | 2026-11-13 |
+| [0011](0011-store-arrow-ipc-snapshots-in-sqlite.md) | Encode complete versions as Arrow IPC blobs inside SQLite | Accepted M1 implementation decision | 2026-11-13 |
 
 Decision-maker: Kevin Ceciliano Gamboa. Acceptance comes from explicit answers in the discovery conversation; it is not evidence of completed implementation or independent engineering review.
 
@@ -30,8 +31,8 @@ Decision-maker: Kevin Ceciliano Gamboa. Acceptance comes from explicit answers i
 ## What remains undecided
 
 - Exact runtime/SDK pins and supported protocol/client matrix; Python and stdio are accepted in ADR-0007.
-- Physical encoding and exact CLI/server commit mechanism; SQLite/PyArrow and complete versions are accepted in ADR-0008/0010.
-- Precise codecs, filter vocabulary and composition semantics; scalar types and closed quality-rule families are accepted in ADR-0009.
+- Repair-plan commit mechanism beyond import; initial source/contract/version registration and IPC encoding are implemented in ADR-0011.
+- Query filter vocabulary and repair composition semantics; M1 scalar codecs are implemented and tested under ADR-0011.
 - Auxiliary operational limits, pagination and machine-readable error taxonomy; initial input ceilings and no automatic pruning are accepted in ADR-0010.
 - Detailed human approval issuance/revocation and stale-plan lifecycle.
 - Real-agent provider/model, case set, repetitions, acceptance thresholds and credential configuration.

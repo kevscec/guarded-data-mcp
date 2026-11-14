@@ -1,4 +1,4 @@
-name: Foundation checks
+name: Checks
 
 on:
   push:
@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   foundation:
-    name: Foundation (${{ matrix.os }})
+    name: Tests and evals (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -37,3 +37,5 @@ jobs:
         run: uv run ruff format --check .
       - name: Verify runtime dependencies
         run: uv run python -c "import sys, sqlite3, mcp, pyarrow, guarded_data_mcp; print(sys.version); print('SQLite', sqlite3.sqlite_version); print('PyArrow', pyarrow.__version__)"
+      - name: Test data fidelity, refusals and real stdio evaluations
+        run: uv run python -m pytest -q
