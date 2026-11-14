@@ -1,6 +1,6 @@
 # Technical specification — controlled data repair MCP
 
-Status: M1 import/inspection implemented under ADRs 0001–0011. Q26–Q28 accepted the closed quality rules, finite float64 support, complete versions and combined source/row/column/cell ceilings. M1 codecs and import persistence are tested; query/repair schemas, approval execution and real-agent evaluation remain future work.
+Status: M1–M2 implemented under ADRs 0001–0012: import/inspection, full-scan closed rules, bounded typed queries and human contract/mapping activation. Q26–Q28 accepted the rule/type families and input envelope. Repair schemas, approval execution and real-agent evaluation remain future work.
 
 ## Approved architecture
 
@@ -26,13 +26,21 @@ The MCP package/tag and current documentation disagree about their minimum Pytho
 - Null is distinct from empty text. Preserve text IDs such as `001`. Decimal conversion cannot use binary floating point. Date/time conversion cannot silently round, truncate precision or assign a timezone.
 - Preserve original source bytes and a SHA-256 manifest. CSV import requires a documented dialect and null policy; CSV export includes a companion schema/null-policy manifest. Parquet round trips preserve the declared supported schema.
 
-## Accepted rule families and proposed query details
+## Implemented rules and queries
 
 Initial rule families: required/non-null, unique key, explicit allowed-value set, inclusive typed bounds and ordered comparison of two compatible date/time columns. A rule has a stable ID and human-readable explanation; there is no arbitrary expression, executable plugin or regex engine.
 
 Normalization maps are finite, typed, human-approved source-to-target pairs. Values map once, simultaneously, without recursive chaining. A many-to-one mapping can create duplicates/conflicts, so the full ordered plan must be simulated. Never normalize a business-key column implicitly.
 
 `query_records` selects allowlisted columns and a bounded conjunction of typed `eq`, `ne`, `in`, `lt`, `lte`, `gt`, `gte`, `is_null` and `is_not_null` predicates, or a finding reference. Null predicates are explicit; comparisons do not treat null as empty. Cursors bind to dataset version and filter identity; stable order uses internal row identity. No expression fragments enter SQL.
+
+M2 evaluates all approved rules over the full selected version or returns an error. Required rules and non-null columns flag nulls. Allowed-value, numeric bounds and ordered temporal rules skip nulls; require an explicit required rule to flag those. Ordered rules enforce `column <= other_column` with identical temporal type/unit/zone. Key groups are either wholly identical (exact duplicate finding includes all group members) or conflicting; missing keys are separate. Without a declared key, repeated records are legitimate multiplicity.
+
+Rules have unique IDs and explanations. Contract schema v2 adds rules and finite maps while schema v1 retains its existing canonical hashes. Findings summarize one rule/kind with full occurrence counts and up to ten row IDs, explicitly marking truncation. Finding IDs bind the current revision, contract and selected version/snapshot; they authorize no mutation.
+
+Queries allow at most 20 predicates, 100 literals per predicate and 100 distinct projected columns. All returned/literal non-null scalars use canonical strings with declared dtype: fixed-scale decimals, signed decimal int64, lowercase booleans, ISO dates, hexadecimal `float.hex()` and signed timestamp epoch ticks in the contract's declared unit/zone. This avoids JavaScript integer rounding and Python datetime nanosecond truncation. Equality preserves representation, including float signed zero; inequalities use typed numeric/temporal/text order. See the [M2 walkthrough](docs/m2-walkthrough.md).
+
+Pages return at most 100 rows and 256 KiB of compact UTF-8 structured payload; SDK text mirroring and protocol framing are additional transport bytes. Pagination can stop below the requested row limit to meet the byte ceiling. A single over-budget row requires a narrower projection. Matched counts are complete; returned row evidence can be truncated. Cursors are HMAC-bound to the entire query, page limit, version, snapshot, contract and head revision. They are session-local and expire on restart. Analysis deadlines are cooperative, checked during scans and before returning; a timeout never returns partial analysis as success.
 
 Quarantine names the rule/finding and exact affected occurrence IDs; approved broadening cannot be inferred from a matching sample. Deduplication requires a complete non-null key and full typed equality of the rows; choose a stable survivor and record removed occurrence IDs. A missing key is a separate finding, never permission to collapse unrelated rows.
 
@@ -41,6 +49,8 @@ Quarantine names the rule/finding and exact affected occurrence IDs; approved br
 Complete versions are encoded as Arrow IPC active/quarantine blobs inside SQLite, as recorded in [ADR-0011](docs/adr/0011-store-arrow-ipc-snapshots-in-sqlite.md). M1 registers source bytes, canonical contract and initial typed version atomically. Later repair publication follows the proposed lifecycle below; it is not implemented by the import slice.
 
 Use a dataset head revision that advances on data publication or activated contract/mapping changes. Plans bind this revision, their base data version, contract version, mapping versions and exact proposed effects. Returning to an old content value does not revive an old approval.
+
+M2 appends activations transactionally, with an expected-revision precondition and exact reviewed contract hash. Initial import and activation preflight analysis/result bounds. Physical schema changes require a future explicit migration capability and are refused here. SQLite schema v2 migrates v1 only inside a human write transaction; MCP reads never migrate. Each data version retains its physical import contract. Inspection of any version applies the currently active quality contract and returns both hashes; historical-rule replay is not implemented. Data publication/head advancement on repair enters in M4. See [ADR-0012](docs/adr/0012-version-quality-contract-activation.md).
 
 Store immutable plans and separate approval/execution records. Human review presents the exact plan hash, scope, counts, examples and unresolved findings. CLI confirmation records approval only after revalidating the reviewed revision. Allow explicit revocation before application. No human interaction occurs inside a database write transaction.
 
@@ -96,7 +106,7 @@ The server opens no network port. Logs go to stderr and exclude raw record conte
 
 ## Remaining decisions
 
-M1 settles IPC version encoding, scalar codecs and the pinned SDK's auto/legacy stdio compatibility. See the [walkthrough](docs/m1-walkthrough.md) for exact CSV/type policies and native-decoder limitations. Next specify M2 rule/query semantics, then repair approval/publication. Choose the real-agent adapter and its measured-suite configuration before evaluating it. Repository identity is `kevscec/guarded-data-mcp`, MIT code license, author Kevin Ceciliano Gamboa using GitHub noreply. Configure identity locally for this repository only.
+M1–M2 settle IPC encoding, scalar codecs, rule/query semantics, contract activation and pinned SDK auto/legacy stdio compatibility. See the [import walkthrough](docs/m1-walkthrough.md) for exact CSV/type policies and native-decoder limitations. Next specify combined repair simulation and immutable plan persistence, then approval/publication. Choose the real-agent adapter and its measured-suite configuration before evaluating it. Repository identity is `kevscec/guarded-data-mcp`, MIT code license, author Kevin Ceciliano Gamboa using GitHub noreply. Configure identity locally for this repository only.
 
 ## References
 

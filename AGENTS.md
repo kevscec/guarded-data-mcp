@@ -24,7 +24,7 @@ uv run python -m pytest -q
 uv run python -m evals.runner
 ```
 
-M1 includes functional tests and a deterministic evaluation runner that starts the real stdio subprocess in automatic and legacy modes. Run checks appropriate to changed behavior, including failure-path/full-state oracles. Do not substitute coverage percentages, import checks or scripted tool calls for real-agent evaluation; the separate real-agent suite remains an M7 deliverable.
+M1–M2 include functional tests and a deterministic evaluation runner that starts the real stdio subprocess in automatic and legacy modes, including human CLI activation while the server remains alive. Run checks appropriate to changed behavior, including failure-path/full-state oracles. Preserve historical reports when extending the runner. Do not substitute coverage percentages, import checks or scripted tool calls for real-agent evaluation; the separate real-agent suite remains an M7 deliverable.
 
 ## Public evidence and data
 

@@ -17,6 +17,7 @@ These records capture the decisions accepted during discovery for the controlled
 | [0009](0009-use-closed-rules-and-explicit-scalar-types.md) | Use closed quality rules and explicit scalar types | Accepted | 2026-11-13 |
 | [0010](0010-retain-complete-versions-with-bounds.md) | Retain complete versions within an explicit initial envelope | Accepted | 2026-11-13 |
 | [0011](0011-store-arrow-ipc-snapshots-in-sqlite.md) | Encode complete versions as Arrow IPC blobs inside SQLite | Accepted M1 implementation decision | 2026-11-13 |
+| [0012](0012-version-quality-contract-activation.md) | Append quality-contract activations without changing data provenance | Accepted M2 implementation decision | 2026-11-13 |
 
 Decision-maker: Kevin Ceciliano Gamboa. Acceptance comes from explicit answers in the discovery conversation; it is not evidence of completed implementation or independent engineering review.
 
@@ -32,7 +33,7 @@ Decision-maker: Kevin Ceciliano Gamboa. Acceptance comes from explicit answers i
 
 - Exact runtime/SDK pins and supported protocol/client matrix; Python and stdio are accepted in ADR-0007.
 - Repair-plan commit mechanism beyond import; initial source/contract/version registration and IPC encoding are implemented in ADR-0011.
-- Query filter vocabulary and repair composition semantics; M1 scalar codecs are implemented and tested under ADR-0011.
+- Repair composition semantics; M2 implements the closed filter vocabulary and contract activation under ADR-0012.
 - Auxiliary operational limits, pagination and machine-readable error taxonomy; initial input ceilings and no automatic pruning are accepted in ADR-0010.
 - Detailed human approval issuance/revocation and stale-plan lifecycle.
 - Real-agent provider/model, case set, repetitions, acceptance thresholds and credential configuration.

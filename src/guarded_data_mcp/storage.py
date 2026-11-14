@@ -11,6 +11,13 @@ from pydantic import ValidationError
 from guarded_data_mcp.domain import DEFAULT_LIMITS, Contract, DomainError, Limits
 
 APPLICATION_ID = 0x47444D31
+# ADR-0012: metadata revisions never rewrite a version's physical import contract.
+ACTIVATIONS = """CREATE TABLE IF NOT EXISTS activations (
+    dataset_id TEXT NOT NULL REFERENCES datasets(dataset_id),
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    contract_sha256 TEXT NOT NULL REFERENCES contracts(sha256),
+    created_at TEXT NOT NULL, PRIMARY KEY(dataset_id,revision)
+) STRICT"""
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
     sha256 TEXT PRIMARY KEY, content BLOB NOT NULL
@@ -56,8 +63,10 @@ class Store:
             )
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("BEGIN")
             application_id = connection.execute("PRAGMA application_id").fetchone()[0]
             version = connection.execute("PRAGMA user_version").fetchone()[0]
+            connection.rollback()
             if write and application_id == 0 and version == 0:
                 connection.execute("PRAGMA journal_mode=WAL")
                 connection.execute("PRAGMA synchronous=FULL")
@@ -75,14 +84,21 @@ class Store:
                             connection.execute(statement)
                     connection.execute(f"PRAGMA application_id={APPLICATION_ID}")
                     connection.execute("PRAGMA user_version=1")
-                elif header != (APPLICATION_ID, 1):
+                elif header not in ((APPLICATION_ID, 1), (APPLICATION_ID, 2)):
                     raise DomainError("STORAGE_INTEGRITY", "Unsupported workspace database format.")
                 connection.commit()
-            elif application_id != APPLICATION_ID or version != 1:
+            elif application_id != APPLICATION_ID or version not in (1, 2):
                 raise DomainError("STORAGE_INTEGRITY", "Unsupported workspace database format.")
             if write:
                 connection.execute("PRAGMA synchronous=FULL")
                 connection.execute("BEGIN IMMEDIATE")
+                if connection.execute("PRAGMA user_version").fetchone()[0] == 1:
+                    connection.execute(ACTIVATIONS)
+                    connection.execute("""INSERT INTO activations
+                        SELECT d.dataset_id,1,v.contract_sha256,v.created_at
+                        FROM datasets d JOIN versions v ON d.dataset_id=v.dataset_id
+                        AND d.current_version=v.version""")
+                    connection.execute("PRAGMA user_version=2")
             else:
                 connection.execute("PRAGMA query_only=ON")
                 connection.execute("BEGIN")
@@ -178,6 +194,10 @@ class Store:
                     datetime.now(UTC).isoformat(),
                 ),
             )
+            connection.execute(
+                "INSERT INTO activations VALUES (?,1,?,?)",
+                (dataset_id, contract.sha256, datetime.now(UTC).isoformat()),
+            )
 
     def list(self, limit: int, after: str | None) -> list[dict]:
         if not self.path.exists():
@@ -224,4 +244,62 @@ class Store:
                 raise DomainError("STORAGE_INTEGRITY", "Stored contract is invalid.") from exc
             if contract.sha256 != result["contract_sha256"]:
                 raise DomainError("STORAGE_INTEGRITY", "Stored contract checksum does not match.")
+            result["head_revision"] = 1
+            result["active_document"] = result["document"]
+            result["active_contract_sha256"] = contract.sha256
+            if connection.execute("PRAGMA user_version").fetchone()[0] == 2:
+                activation = connection.execute(
+                    """SELECT a.revision,a.contract_sha256,c.document
+                    FROM activations a JOIN contracts c ON c.sha256=a.contract_sha256
+                    WHERE a.dataset_id=? ORDER BY a.revision DESC LIMIT 1""",
+                    (dataset_id,),
+                ).fetchone()
+                if activation is None:
+                    raise DomainError("STORAGE_INTEGRITY", "Active contract is missing.")
+                result.update(
+                    head_revision=activation["revision"],
+                    active_document=activation["document"],
+                    active_contract_sha256=activation["contract_sha256"],
+                )
             return result, contract
+
+    def activate(self, dataset_id: str, contract: Contract, expected_revision: int) -> int:
+        with self.connection(write=True) as connection:
+            row = connection.execute(
+                """SELECT a.revision,c.document FROM activations a
+                JOIN contracts c ON c.sha256=a.contract_sha256
+                WHERE a.dataset_id=? ORDER BY a.revision DESC LIMIT 1""",
+                (dataset_id,),
+            ).fetchone()
+            if row is None:
+                raise DomainError("UNKNOWN_DATASET", "No dataset is registered with that ID.")
+            if row["revision"] != expected_revision:
+                raise DomainError("STALE_REVISION", "Reviewed dataset revision has changed.")
+            old = Contract.model_validate_json(row["document"])
+            if [c.model_dump(exclude={"nullable"}) for c in old.columns] != [
+                c.model_dump(exclude={"nullable"}) for c in contract.columns
+            ]:
+                raise DomainError("SCHEMA_CHANGE", "Activation cannot change the physical schema.")
+            document = contract.canonical_json()
+            stored = connection.execute(
+                "SELECT document FROM contracts WHERE sha256=?", (contract.sha256,)
+            ).fetchone()
+            if stored is not None and stored[0] != document:
+                raise DomainError("STORAGE_INTEGRITY", "Stored contract is damaged.")
+            if stored is None:
+                used = connection.execute("""SELECT
+                    (SELECT coalesce(sum(length(content)),0) FROM sources) +
+                    (SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM contracts) +
+                    (SELECT coalesce(sum(length(snapshot)+length(quarantine)),0) FROM versions)
+                    """).fetchone()[0]
+                if used + len(document.encode()) > self.limits.quota_bytes:
+                    raise DomainError("RESOURCE_LIMIT", "Contract would exceed retained quota.")
+                connection.execute(
+                    "INSERT INTO contracts VALUES (?,?)", (contract.sha256, document)
+                )
+            revision = expected_revision + 1
+            connection.execute(
+                "INSERT INTO activations VALUES (?,?,?,?)",
+                (dataset_id, revision, contract.sha256, datetime.now(UTC).isoformat()),
+            )
+            return revision

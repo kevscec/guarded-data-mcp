@@ -1,6 +1,6 @@
 # M1: import and inspect a local dataset
 
-M1 implements human-only CSV/Parquet import and the `list_datasets` / `inspect_dataset` MCP tools. It does not repair data or evaluate quality rules yet. The examples below use project-authored synthetic records, not NYC data.
+This walkthrough covers M1 import/provenance, which remains supported in M2. The current server also evaluates approved rules and exposes `query_records`; see the [M2 walkthrough](m2-walkthrough.md). Repair execution remains unimplemented. The examples below use project-authored synthetic records, not NYC data.
 
 ## Install and evaluate
 
@@ -46,9 +46,9 @@ Configure a local stdio server with the absolute path to the project's `.venv` P
 
 On Windows the project executable is `.venv/Scripts/python.exe`; on Linux it is `.venv/bin/python`. The JSON above is a command/argument definition to adapt to the host client's configuration format, not a claim that every host shares the same file format.
 
-Call `list_datasets` with `{}` and `inspect_dataset` with `{"dataset_id":"example"}`. Client inputs are registered IDs and optional versions, never source paths. Inspection returns typed contract/provenance, row counts and full null counts, without raw record values or local source paths. `quality_status` is explicitly `not_evaluated` and `findings_evaluated` is false.
+Call `list_datasets` with `{}` and `inspect_dataset` with `{"dataset_id":"example"}`. Client inputs are registered IDs and optional versions, never source paths. Inspection returns typed contract/provenance, full null counts and approved-rule findings without raw cell values or local source paths. M2 marks complete rule evaluation explicitly; the historical M1 implementation reported `not_evaluated`.
 
-Tested protocol combinations are the pinned MCP SDK client against the pinned SDK server using `mode=auto` (negotiated `2026-07-28`) and `mode=legacy` (negotiated `2025-11-25`). Each mode passed nine cases in the [recorded result](evals/m1-results.json). Desktop host products are not yet individually certified.
+Tested protocol combinations are the pinned MCP SDK client against the pinned SDK server using `mode=auto` (negotiated `2026-07-28`) and `mode=legacy` (negotiated `2025-11-25`). The [historical M1 result](evals/m1-results.json) records nine cases per mode at commit `8f54883`; the [current M2 result](evals/m2-results.json) records the expanded suite. Desktop host products are not yet individually certified.
 
 ## Supported input policy
 
@@ -59,6 +59,6 @@ Tested protocol combinations are the pinned MCP SDK client against the pinned SD
 - Input limits: 64 MiB source, 100,000 rows, 100 columns and 1,000,000 cells, applied together. CLI can lower source-byte/row limits; it cannot raise them.
 - Auxiliary defaults: 128 MiB accumulated logical table size, 64 KiB per text value, 2 GiB logical retained-content quota, 30-second cooperative import deadline and a bounded five-second database lock wait.
 
-Unsupported structure or conversion is an error, not an automatic quarantine decision. Arrow conversion messages can contain raw data; the CLI and tools return sanitized domain errors. Nullability and the declared key are stored but their quality rules enter in M2.
+Unsupported structure or conversion is an error, not an automatic quarantine decision. Arrow conversion messages can contain raw data; the CLI and tools return sanitized domain errors. M2 evaluates nullability and the declared key without changing imported values.
 
 The decoded-data limit is checked per batch after native decoding, and the deadline is cooperative. These are not guarantees against arbitrary memory allocation or a stalled native decoder on a malicious compressed file. Original files are supplied by the trusted human operator; the server's agent-facing tools cannot acquire files or initiate imports.

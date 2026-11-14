@@ -2,7 +2,7 @@
 
 Status: development sequence based on accepted ADRs 0001–0010. Q26–Q28 accepted the initial types/rules, full-version approach and input ceilings. Repository identity is accepted: `kevscec/guarded-data-mcp`, MIT, author Kevin Ceciliano Gamboa with GitHub noreply email. Auxiliary defaults in [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) remain explicit technical-validation work.
 
-Progress: M0 foundation is published. M1 import/inspection and its deterministic evaluation are implemented with local behavioral/protocol evidence. CI runs that suite on Windows and Ubuntu on every push. M2–M8 are not started. The public repository is [kevscec/guarded-data-mcp](https://github.com/kevscec/guarded-data-mcp).
+Progress: M0–M2 are implemented: foundation, import/inspection, quality rules, bounded queries and human contract/mapping activation. CI runs behavioral tests and actual stdio evaluations on Windows and Ubuntu on every push. M3–M8 are not started. The public repository is [kevscec/guarded-data-mcp](https://github.com/kevscec/guarded-data-mcp).
 
 The sequence uses deliverables and dependencies, not a calendar. Every functional milestone includes its own evaluation cases; the harness is not deferred to the end. The map below describes target responsibilities. M1 keeps these in focused modules (`domain.py`, `storage.py`, `codec.py`, `ingest.py`, `services.py`, `server.py`, `__main__.py`) rather than creating empty subpackages for future work.
 
@@ -67,11 +67,13 @@ Deliver: full-scan rule evaluation, deterministic findings, `query_records`, ver
 
 Acceptance:
 
-- [ ] Detect exact duplicates separately from conflicting keys and legitimate multiplicity.
-- [ ] New/missing categories are not called corrupt without an approved applicable rule.
-- [ ] Queries preserve types and stable row identities; changed versions or altered filters cannot reuse a cursor silently.
-- [ ] Hostile identifiers, expression fragments and unbounded requests cannot become executable code or arbitrary file access.
-- [ ] Truncated row evidence and incomplete analysis remain explicit; neither becomes a whole-dataset quality claim.
+- [x] Detect exact duplicates separately from conflicting keys and legitimate multiplicity.
+- [x] New/missing categories are not called corrupt without an approved applicable rule.
+- [x] Queries preserve types and stable row identities; changed versions or altered filters cannot reuse a cursor silently.
+- [x] Hostile identifiers, expression fragments and unbounded requests cannot become executable code or arbitrary file access.
+- [x] Truncated row evidence and incomplete analysis remain explicit; neither becomes a whole-dataset quality claim.
+
+Evidence: [M2 walkthrough](docs/m2-walkthrough.md), [recorded deterministic results](docs/evals/m2-results.json), quality/activation/failure tests and both real stdio protocol modes. Activation changes metadata only; no repair or real-agent outcome is claimed.
 
 ## M3 — Materialize exact, immutable repair proposals
 
@@ -161,4 +163,4 @@ Acceptance:
 
 ## Immediate next gate
 
-Execute M1 as the first complete vertical slice. Resolve the documented codec/schema details through targeted validation before implementing persistence. No dates or elapsed-time targets define completion.
+Execute M3: simulate the three repair families and persist immutable proposals with exact effects, without enabling application. Resolve combined-step semantics and mandatory postconditions before recording reviewable plans. No dates or elapsed-time targets define completion.

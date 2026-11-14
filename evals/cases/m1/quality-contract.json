@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "columns": [
+    {"name": "id", "dtype": "text", "nullable": false},
+    {"name": "category", "dtype": "text"},
+    {"name": "amount", "dtype": "decimal128", "precision": 12, "scale": 2},
+    {"name": "note", "dtype": "text"}
+  ],
+  "unique_key": ["id"],
+  "rules": [
+    {
+      "rule_id": "categories",
+      "explanation": "This synthetic example permits only open and closed categories.",
+      "kind": "allowed_values",
+      "column": "category",
+      "values": ["open", "closed"]
+    }
+  ],
+  "mappings": [
+    {
+      "mapping_id": "example-equivalence",
+      "explanation": "Synthetic, explicitly reviewed equivalence for a future repair plan.",
+      "column": "category",
+      "pairs": [{"source": "unfamiliar", "target": "open"}]
+    }
+  ]
+}

@@ -40,10 +40,15 @@ def main() -> int:
     importer.add_argument("--format", choices=["csv", "parquet"], required=True)
     importer.add_argument("--contract", type=Path, required=True)
     importer.add_argument("--approve-contract", required=True, metavar="SHA256")
+    activate = commands.add_parser("activate-contract", help="Human-only rules/mapping activation")
+    activate.add_argument("dataset_id")
+    activate.add_argument("--contract", type=Path, required=True)
+    activate.add_argument("--approve-contract", required=True, metavar="SHA256")
+    activate.add_argument("--expected-revision", required=True, type=int)
     commands.add_parser("list")
     inspect = commands.add_parser("inspect")
     inspect.add_argument("dataset_id")
-    commands.add_parser("serve", help="Run the read-only M1 MCP server on stdio")
+    commands.add_parser("serve", help="Run the read-only MCP server on stdio")
     args = parser.parse_args()
     try:
         try:
@@ -69,6 +74,13 @@ def main() -> int:
             ).model_dump(mode="json")
         elif args.command == "list":
             payload = service.list_datasets().model_dump(mode="json")
+        elif args.command == "activate-contract":
+            payload = service.activate_contract(
+                args.dataset_id,
+                load_contract(args.contract),
+                args.approve_contract,
+                args.expected_revision,
+            )
         else:
             payload = service.inspect(args.dataset_id).model_dump(mode="json")
         print(json.dumps(payload, ensure_ascii=False))

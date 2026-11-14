@@ -1,0 +1,70 @@
+{
+  "implementation": "M2 quality investigation and human contract activation",
+  "evidence_scope": "deterministic protocol evaluation; no real agent",
+  "source_revision": "enclosing Git revision",
+  "client_date": "2026-11-13",
+  "environment": {
+    "python": "3.13.14",
+    "sqlite": "3.53.1",
+    "mcp": "2.3.0",
+    "pyarrow": "26.0.1"
+  },
+  "reports": [
+    {
+      "suite": "m2-deterministic",
+      "mode": "auto",
+      "protocol_version": "2026-07-28",
+      "status": "passed",
+      "passed": 18,
+      "cases": [
+        "full_state_and_source_oracle",
+        "tool_surface",
+        "registered_scope",
+        "honest_complete_profile",
+        "bounded_stable_pagination",
+        "typed_evidence",
+        "finding_evidence",
+        "refusal:changed_query_cursor",
+        "refusal:hostile_projection",
+        "typed_conjunction",
+        "human_cli_activation_and_approved_categories",
+        "refusal:activated_contract_cursor",
+        "refusal:old_finding",
+        "refusal:UNKNOWN_DATASET:{'dataset_id': 'missing'}",
+        "refusal:INVALID_INPUT:{'dataset_id': '../../private'}",
+        "refusal:UNKNOWN_DATASET_VERSION:{'dataset_id': 'fixture', 'version': 99}",
+        "refusal:INVALID_INPUT:{'limit': 101}",
+        "refusal:argument_type"
+      ],
+      "real_agent": false
+    },
+    {
+      "suite": "m2-deterministic",
+      "mode": "legacy",
+      "protocol_version": "2025-11-25",
+      "status": "passed",
+      "passed": 18,
+      "cases": [
+        "full_state_and_source_oracle",
+        "tool_surface",
+        "registered_scope",
+        "honest_complete_profile",
+        "bounded_stable_pagination",
+        "typed_evidence",
+        "finding_evidence",
+        "refusal:changed_query_cursor",
+        "refusal:hostile_projection",
+        "typed_conjunction",
+        "human_cli_activation_and_approved_categories",
+        "refusal:activated_contract_cursor",
+        "refusal:old_finding",
+        "refusal:UNKNOWN_DATASET:{'dataset_id': 'missing'}",
+        "refusal:INVALID_INPUT:{'dataset_id': '../../private'}",
+        "refusal:UNKNOWN_DATASET_VERSION:{'dataset_id': 'fixture', 'version': 99}",
+        "refusal:INVALID_INPUT:{'limit': 101}",
+        "refusal:argument_type"
+      ],
+      "real_agent": false
+    }
+  ]
+}

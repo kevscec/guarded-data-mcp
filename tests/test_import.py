@@ -63,8 +63,9 @@ def test_exact_source_text_identity_nulls_and_duplicates(tmp_path):
     ]
     assert result.row_count == 5
     assert result.columns[0].null_count == 1  # Nullability is quality, not source coercion.
-    assert result.quality_status == "not_evaluated"
-    assert not result.findings_evaluated
+    assert result.quality_status == "violations"
+    assert result.findings_evaluated
+    assert {f.kind for f in result.findings} == {"required", "missing_key", "exact_duplicate"}
     with closing(sqlite3.connect(service.store.path)) as connection, connection:
         assert connection.execute("SELECT content FROM sources").fetchone()[0] == raw
     assert result.source_sha256 == hashlib.sha256(raw).hexdigest()

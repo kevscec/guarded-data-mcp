@@ -1,4 +1,4 @@
-"""Deterministic M1 evaluation: human CLI import, real stdio transport, full-state oracle."""
+"""Import regression plus M2 investigation: real stdio transport and full-state oracle."""
 
 import argparse
 import asyncio
@@ -61,7 +61,7 @@ async def protocol_cases(workspace: Path, *, mode: str = "auto") -> tuple[list[s
         protocol_version = str(client.protocol_version)
         tools = (await client.list_tools()).tools
         require(
-            {tool.name for tool in tools} == {"list_datasets", "inspect_dataset"},
+            {tool.name for tool in tools} == {"list_datasets", "inspect_dataset", "query_records"},
             "Unexpected privilege/tool exposed",
         )
         schemas = {tool.name: tool.output_schema for tool in tools}
@@ -88,13 +88,151 @@ async def protocol_cases(workspace: Path, *, mode: str = "auto") -> tuple[list[s
             "Null profile mismatch",
         )
         require(
-            payload["quality_status"] == "not_evaluated" and not payload["findings_evaluated"],
-            "Inspection falsely claimed quality validation",
+            payload["quality_status"] == "violations"
+            and payload["analysis_complete"]
+            and [(f["kind"], f["row_count"]) for f in payload["findings"]]
+            == [("exact_duplicate", 2)],
+            "Quality findings do not match the independently specified fixture",
         )
         require(
             "rows" not in payload and "source_path" not in payload, "Unexpected raw data disclosure"
         )
         passed.append("honest_complete_profile")
+
+        first = await client.call_tool("query_records", {"dataset_id": "fixture", "limit": 2})
+        require(not first.is_error, "Record query failed")
+        page = first.structured_content
+        validate(page, schemas["query_records"])
+        require([r["row_id"] for r in page["records"]] == [1, 2], "Wrong first page")
+        require(page["matched_count"] == 4 and page["evidence_truncated"], "Hidden truncation")
+        second = await client.call_tool(
+            "query_records", {"dataset_id": "fixture", "limit": 2, "cursor": page["next_cursor"]}
+        )
+        require(not second.is_error, "Second page failed")
+        validate(second.structured_content, schemas["query_records"])
+        require(
+            [r["row_id"] for r in second.structured_content["records"]] == [3, 4],
+            "Lost or repeated occurrence",
+        )
+        passed.append("bounded_stable_pagination")
+        require(
+            page["records"][0]["cells"]["amount"] == {"dtype": "decimal128", "value": "12.30"},
+            "Decimal changed on wire",
+        )
+        passed.append("typed_evidence")
+        finding = await client.call_tool(
+            "query_records",
+            {"dataset_id": "fixture", "finding_id": payload["findings"][0]["finding_id"]},
+        )
+        require(
+            not finding.is_error
+            and [r["row_id"] for r in finding.structured_content["records"]] == [1, 2],
+            "Finding evidence mismatch",
+        )
+        passed.append("finding_evidence")
+        altered = await client.call_tool(
+            "query_records",
+            {"dataset_id": "fixture", "limit": 2, "cursor": page["next_cursor"], "columns": ["id"]},
+        )
+        require(
+            altered.is_error and altered.structured_content["code"] == "STALE_CURSOR",
+            "Changed query accepted old cursor",
+        )
+        passed.append("refusal:changed_query_cursor")
+        hostile = await client.call_tool(
+            "query_records", {"dataset_id": "fixture", "columns": ["id; DROP TABLE datasets"]}
+        )
+        require(
+            hostile.is_error and hostile.structured_content["code"] == "INVALID_INPUT",
+            "Expression fragment accepted as column",
+        )
+        passed.append("refusal:hostile_projection")
+
+        filtered = await client.call_tool(
+            "query_records",
+            {
+                "dataset_id": "fixture",
+                "predicates": [
+                    {"column": "amount", "op": "gte", "values": ["1.00"]},
+                    {"column": "id", "op": "ne", "values": ["001"]},
+                ],
+            },
+        )
+        require(
+            not filtered.is_error
+            and [r["row_id"] for r in filtered.structured_content["records"]] == [4],
+            "Typed conjunction mismatch",
+        )
+        passed.append("typed_conjunction")
+
+        # Trusted controller uses the human CLI while the same MCP subprocess stays alive.
+        document = json.loads((CASES / "contract.json").read_text())
+        document.update(
+            schema_version=2,
+            rules=[
+                {
+                    "rule_id": "categories",
+                    "explanation": "Only reviewed categories",
+                    "kind": "allowed_values",
+                    "column": "category",
+                    "values": ["open", "closed"],
+                }
+            ],
+        )
+        updated = Contract.model_validate(document)
+        path = workspace.parent / "reviewed-contract.json"
+        path.write_text(updated.canonical_json(), encoding="utf-8")
+        activated = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "guarded_data_mcp",
+                "--workspace",
+                str(workspace),
+                "activate-contract",
+                "fixture",
+                "--contract",
+                str(path),
+                "--approve-contract",
+                updated.sha256,
+                "--expected-revision",
+                "1",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        require(activated.returncode == 0, "Human CLI contract activation failed")
+        current = await client.call_tool("inspect_dataset", {"dataset_id": "fixture"})
+        require(
+            not current.is_error and current.structured_content["head_revision"] == 2,
+            "Running server did not observe activated revision",
+        )
+        validate(current.structured_content, schemas["inspect_dataset"])
+        require(
+            [(f["kind"], f["sample_row_ids"]) for f in current.structured_content["findings"]]
+            == [("exact_duplicate", [1, 2]), ("allowed_values", [4])],
+            "New category was not classified under the exact activated rule",
+        )
+        passed.append("human_cli_activation_and_approved_categories")
+        stale = await client.call_tool(
+            "query_records", {"dataset_id": "fixture", "limit": 2, "cursor": page["next_cursor"]}
+        )
+        require(
+            stale.is_error and stale.structured_content["code"] == "STALE_CURSOR",
+            "Activated contract failed to invalidate cursor",
+        )
+        passed.append("refusal:activated_contract_cursor")
+        stale_finding = await client.call_tool(
+            "query_records",
+            {"dataset_id": "fixture", "finding_id": payload["findings"][0]["finding_id"]},
+        )
+        require(
+            stale_finding.is_error
+            and stale_finding.structured_content["code"] == "UNKNOWN_FINDING",
+            "Old finding silently reinterpreted under a new revision",
+        )
+        passed.append("refusal:old_finding")
 
         for tool, arguments, code in [
             ("inspect_dataset", {"dataset_id": "missing"}, "UNKNOWN_DATASET"),
@@ -147,7 +285,7 @@ def run(mode: str = "auto") -> dict:
         passed = ["full_state_and_source_oracle", *cases]
         full_state_oracle(workspace)
         return {
-            "suite": "m1-deterministic",
+            "suite": "m2-deterministic",
             "mode": mode,
             "protocol_version": protocol_version,
             "status": "passed",

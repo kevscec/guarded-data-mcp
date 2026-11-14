@@ -32,6 +32,22 @@ _Avoid_: Inferred schema (which alone does not establish the applicable rules).
 An additional occurrence of a record with the same key and identical values, where the dataset contract requires that key to be unique.
 _Avoid_: Similar record, conflicting record.
 
+**Conflicting key**:
+Occurrences that share a complete declared unique key but disagree in at least one record value. The contract alone does not identify which values are correct.
+_Avoid_: Exact duplicate.
+
+**Missing key**:
+An occurrence with at least one null component of its declared business key. Missing keys do not establish that different occurrences represent the same record.
+_Avoid_: Duplicate key.
+
+**Quality finding**:
+A set of occurrences violating one applicable approved requirement in a specific reviewed dataset state. Its evidence can be sampled without reducing the scope of the finding's full count.
+_Avoid_: Repair authorization, sampled validation.
+
+**Contract activation**:
+A human decision making an exact reviewed contract applicable to the working dataset. Activation changes its quality requirements without changing record values.
+_Avoid_: Data repair, inferred approval.
+
 **Normalization**:
 A change of representation using explicit, approved equivalences, without inventing a missing or unknown value.
 _Avoid_: Inference, imputation.

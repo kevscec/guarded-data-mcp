@@ -66,10 +66,35 @@ class Column(Model):
         return self
 
 
+class Rule(Model):
+    rule_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")
+    explanation: str = Field(min_length=1, max_length=512)
+    kind: Literal["required", "allowed_values", "bounds", "ordered"]
+    column: str
+    values: list[str] = Field(default_factory=list, max_length=1000)
+    minimum: str | None = None
+    maximum: str | None = None
+    other_column: str | None = None
+
+
+class MappingPair(Model):
+    source: str
+    target: str
+
+
+class NormalizationMap(Model):
+    mapping_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")
+    explanation: str = Field(min_length=1, max_length=512)
+    column: str
+    pairs: list[MappingPair] = Field(min_length=1, max_length=1000)
+
+
 class Contract(Model):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     columns: list[Column] = Field(min_length=1, max_length=100)
     unique_key: list[str] = Field(default_factory=list, max_length=100)
+    rules: list[Rule] = Field(default_factory=list, max_length=100)
+    mappings: list[NormalizationMap] = Field(default_factory=list, max_length=100)
 
     @model_validator(mode="after")
     def validate_names(self) -> Self:
@@ -80,12 +105,20 @@ class Contract(Model):
             raise ValueError("Key columns must be unique")
         if not set(self.unique_key).issubset(names):
             raise ValueError("Key columns must exist")
+        if self.schema_version == 1 and (self.rules or self.mappings):
+            raise ValueError("Rules and mappings require contract schema_version 2")
+        from guarded_data_mcp.quality import validate_contract_rules
+
+        validate_contract_rules(self)
         return self
 
     def canonical_json(self) -> str:
-        return json.dumps(
-            self.model_dump(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        )
+        document = self.model_dump()
+        if self.schema_version == 1:
+            # Existing M1 content addresses must remain byte-for-byte compatible.
+            document.pop("rules")
+            document.pop("mappings")
+        return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
     @property
     def sha256(self) -> str:
@@ -156,5 +189,47 @@ class DatasetInspection(Model):
     contract: Contract
     columns: list[ColumnProfile]
     profile_complete: Literal[True] = True
-    quality_status: Literal["not_evaluated"] = "not_evaluated"
-    findings_evaluated: Literal[False] = False
+    head_revision: int
+    physical_contract_sha256: str
+    quality_status: Literal["no_violations", "violations"]
+    findings_evaluated: Literal[True] = True
+    analysis_complete: Literal[True] = True
+    findings: list["Finding"]
+
+
+class Finding(Model):
+    finding_id: str
+    rule_id: str
+    kind: str
+    row_count: int
+    sample_row_ids: list[int]
+    evidence_truncated: bool
+
+
+class Predicate(Model):
+    column: str = Field(min_length=1, max_length=128)
+    op: Literal["eq", "ne", "in", "lt", "lte", "gt", "gte", "is_null", "is_not_null"]
+    values: list[str] = Field(default_factory=list, max_length=100)
+
+
+class Cell(Model):
+    dtype: str
+    value: str | None
+
+
+class Record(Model):
+    row_id: int
+    cells: dict[str, Cell]
+
+
+class RecordPage(Model):
+    status: Literal["ok"] = "ok"
+    dataset_id: str
+    version: int
+    head_revision: int
+    contract_sha256: str
+    records: list[Record]
+    matched_count: int
+    analysis_complete: Literal[True] = True
+    evidence_truncated: bool
+    next_cursor: str | None = None
