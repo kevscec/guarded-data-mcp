@@ -1,6 +1,6 @@
 # Technical specification — controlled data repair MCP
 
-Status: implementation specification in progress. ADRs 0001–0010 are accepted. Q26–Q28 accepted the closed quality rules, finite float64 support, complete versions and combined source/row/column/cell ceilings. Detailed codecs, schemas and auxiliary operational defaults still require technical validation. The repository/environment foundation is being established; repair tools are not implemented yet.
+Status: implementation specification in progress. ADRs 0001–0010 are accepted. Q26–Q28 accepted the closed quality rules, finite float64 support, complete versions and combined source/row/column/cell ceilings. Detailed codecs, schemas and auxiliary operational defaults still require technical validation. The public repository/environment foundation is established; repair tools are not implemented yet.
 
 ## Approved architecture
 
@@ -11,7 +11,7 @@ Status: implementation specification in progress. ADRs 0001–0010 are accepted.
 - Atomic, state-bound application with durable replay receipts and versioned restoration.
 - Both deterministic and real-agent evaluations are release deliverables.
 
-## Candidate runtime baseline
+## Verified foundation runtime
 
 The initial local environment is installed and locked: CPython 3.13.14, `mcp==2.3.0` and `pyarrow==26.0.1`. The local Python build reports SQLite 3.53.1. `.python-version`, `pyproject.toml` and `uv.lock` define the reproducible baseline; CI must verify Windows x64 and Linux x64 separately. Record actual runtime/SQLite versions in future diagnostics and evaluation reports rather than assuming every distribution embeds the same SQLite library.
 

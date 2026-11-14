@@ -2,6 +2,8 @@
 
 Status: development sequence based on accepted ADRs 0001–0010. Q26–Q28 accepted the initial types/rules, full-version approach and input ceilings. Repository identity is accepted: `kevscec/guarded-data-mcp`, MIT, author Kevin Ceciliano Gamboa with GitHub noreply email. Auxiliary defaults in [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) remain explicit technical-validation work.
 
+Progress: M0 foundation is published and its initial Windows/Linux CI passed. M1 and subsequent functional milestones are not started. The public repository is [kevscec/guarded-data-mcp](https://github.com/kevscec/guarded-data-mcp).
+
 The sequence uses deliverables and dependencies, not a calendar. Every functional milestone includes its own evaluation cases; the harness is not deferred to the end. Internal module/package names below are proposed paths, not final branding.
 
 ## Repository map
@@ -38,11 +40,11 @@ Deliver: public repository under the user's account before the first commit; ADR
 
 Acceptance:
 
-- [ ] Public visibility is verified before committing; author name/email are verified as the user's identity.
-- [ ] Existing documentation is checked for employer materials and credentials before staging.
-- [ ] Recreate the isolated environment from its lock without changing the host's existing environment.
-- [ ] Verify the selected published SDK version and stdio compatibility; record actual Python/SQLite/PyArrow versions.
-- [ ] CI runs the available meaningful checks; no fabricated passing product tests or completed-feature claims.
+- [x] Public visibility is verified before committing; GitHub attributes the first commit to kevscec using the selected noreply identity.
+- [x] Existing documentation is checked for employer materials and credentials before staging.
+- [x] The isolated environment is recreated from its lock locally and by Windows/Linux CI without changing the host's existing environment.
+- [x] Published SDK/PyArrow packages import successfully; actual Python/SQLite/PyArrow versions are recorded. Actual stdio/client compatibility remains an M1 protocol gate, not a foundation claim.
+- [x] CI runs meaningful documentation, lint, formatting and runtime-import checks; no fabricated passing product tests or completed-feature claims.
 
 ## M1 — First vertical slice: import, inspect and reproduce
 
@@ -159,4 +161,4 @@ Acceptance:
 
 ## Immediate next gate
 
-Execute M0 with the accepted repository identity, then M1 as the first complete vertical slice. Resolve the documented codec/schema details through targeted validation before implementing persistence. No dates or elapsed-time targets define completion.
+Execute M1 as the first complete vertical slice. Resolve the documented codec/schema details through targeted validation before implementing persistence. No dates or elapsed-time targets define completion.

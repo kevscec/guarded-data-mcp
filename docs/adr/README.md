@@ -35,7 +35,7 @@ Decision-maker: Kevin Ceciliano Gamboa. Acceptance comes from explicit answers i
 - Auxiliary operational limits, pagination and machine-readable error taxonomy; initial input ceilings and no automatic pruning are accepted in ADR-0010.
 - Detailed human approval issuance/revocation and stale-plan lifecycle.
 - Real-agent provider/model, case set, repetitions, acceptance thresholds and credential configuration.
-- First-public-commit setup and attribution verification. The user selected `kevscec/guarded-data-mcp`, MIT and GitHub noreply authorship.
+- Supported client/protocol combinations must still be measured. First-public-commit setup and attribution verification are complete for `kevscec/guarded-data-mcp`, with MIT and GitHub noreply authorship.
 
 These need explicit technical specification or validation before the affected milestone. No unlisted dependency version, codec representation or auxiliary limit is accepted by implication. Review the [technical specification](../../TECHNICAL_SPEC.md) and [development plan](../../DEVELOPMENT_PLAN.md) for accepted input limits, remaining details and deliverable gates.
 

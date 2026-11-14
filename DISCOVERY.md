@@ -1,6 +1,6 @@
 # Project discovery
 
-Status: product, base-stack and initial type/limit decisions recorded in docs/adr/; M0 public repository/environment setup is in progress.
+Status: product, base-stack and initial type/limit decisions recorded in docs/adr/; M0 public foundation is published with passing initial Windows/Linux CI. M1 is next.
 
 ## Settled direction
 
@@ -57,7 +57,7 @@ Status: product, base-stack and initial type/limit decisions recorded in docs/ad
 - Logical types, rule/filter schemas, resource limits and detailed approval lifecycle.
 - Real-agent evaluation configuration, cases, repetitions and measurable acceptance criteria.
 - Whether to extend a public project or create an independent project.
-- Verify first-public-commit authorship and CI. Repository name, MIT code license and noreply identity are accepted.
+- Select the first tested client/protocol compatibility target during M1; no running MCP endpoint is claimed yet.
 
 ## Accepted tool surface and release evidence
 
@@ -76,7 +76,7 @@ The authoritative accepted decisions are indexed in [docs/adr/README.md](docs/ad
 
 Reviewable drafts now exist in [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) and [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md). Proposed defaults are labeled and are not accepted by implication.
 
-Q26–Q28 accepted closed rules, finite float64 support, complete versions and the combined initial input ceilings. The user then selected `kevscec/guarded-data-mcp`, MIT for code and Kevin Ceciliano Gamboa's GitHub noreply identity. The public repository was created before any local commit; publication of the foundation is in progress.
+Q26–Q28 accepted closed rules, finite float64 support, complete versions and the combined initial input ceilings. The user then selected `kevscec/guarded-data-mcp`, MIT for code and Kevin Ceciliano Gamboa's GitHub noreply identity. The public repository was created before the first local commit. GitHub attributes the published root commit to kevscec; the initial foundation CI passed on Windows and Linux.
 
 ## Working method
 
