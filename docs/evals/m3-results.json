@@ -1,0 +1,100 @@
+{
+  "implementation": "M3 immutable repair proposals and exact typed previews",
+  "evidence_scope": "deterministic protocol evaluation; no real agent",
+  "source_revision": "enclosing Git revision",
+  "client_date": "2026-11-13",
+  "environment": {
+    "python": "3.13.14",
+    "sqlite": "3.53.1",
+    "mcp": "2.3.0",
+    "pyarrow": "26.0.1"
+  },
+  "reports": [
+    {
+      "suite": "m3-deterministic",
+      "mode": "auto",
+      "protocol_version": "2026-07-28",
+      "status": "passed",
+      "passed": 27,
+      "cases": [
+        "full_state_and_source_oracle",
+        "tool_surface",
+        "registered_scope",
+        "honest_complete_profile",
+        "bounded_stable_pagination",
+        "typed_evidence",
+        "finding_evidence",
+        "refusal:changed_query_cursor",
+        "refusal:hostile_projection",
+        "typed_conjunction",
+        "human_cli_activation_and_approved_categories",
+        "refusal:activated_contract_cursor",
+        "refusal:old_finding",
+        "immutable_proposal_without_approval",
+        "complete_paginated_manifest",
+        "idempotent_preparation",
+        "approved_normalization_preview",
+        "refusal:executable_step_schema",
+        "stale_proposal_preserves_review",
+        "refusal:UNKNOWN_DATASET:{'dataset_id': 'missing'}",
+        "refusal:INVALID_INPUT:{'dataset_id': '../../private'}",
+        "refusal:UNKNOWN_DATASET_VERSION:{'dataset_id': 'fixture', 'version': 99}",
+        "refusal:INVALID_INPUT:{'limit': 101}",
+        "refusal:UNKNOWN_PLAN:{'plan_id': 'plan_0000000000000000000000000000000000000000000000000000000000000000'}",
+        "refusal:argument_type",
+        "restart_durable_proposal",
+        "independent_full_preview_oracle"
+      ],
+      "real_agent": false
+    },
+    {
+      "suite": "m3-deterministic",
+      "mode": "legacy",
+      "protocol_version": "2025-11-25",
+      "status": "passed",
+      "passed": 27,
+      "cases": [
+        "full_state_and_source_oracle",
+        "tool_surface",
+        "registered_scope",
+        "honest_complete_profile",
+        "bounded_stable_pagination",
+        "typed_evidence",
+        "finding_evidence",
+        "refusal:changed_query_cursor",
+        "refusal:hostile_projection",
+        "typed_conjunction",
+        "human_cli_activation_and_approved_categories",
+        "refusal:activated_contract_cursor",
+        "refusal:old_finding",
+        "immutable_proposal_without_approval",
+        "complete_paginated_manifest",
+        "idempotent_preparation",
+        "approved_normalization_preview",
+        "refusal:executable_step_schema",
+        "stale_proposal_preserves_review",
+        "refusal:UNKNOWN_DATASET:{'dataset_id': 'missing'}",
+        "refusal:INVALID_INPUT:{'dataset_id': '../../private'}",
+        "refusal:UNKNOWN_DATASET_VERSION:{'dataset_id': 'fixture', 'version': 99}",
+        "refusal:INVALID_INPUT:{'limit': 101}",
+        "refusal:UNKNOWN_PLAN:{'plan_id': 'plan_0000000000000000000000000000000000000000000000000000000000000000'}",
+        "refusal:argument_type",
+        "restart_durable_proposal",
+        "independent_full_preview_oracle"
+      ],
+      "real_agent": false
+    }
+  ],
+  "limitations": [
+    "No approval or application capability.",
+    "Initial empty quarantine only.",
+    "Cooperative deadlines; no process-level memory or CPU sandbox."
+  ],
+  "development_corrections": [
+    {
+      "scope": "test harness",
+      "issue": "An inherited cursor-tampering test sometimes replaced a random first character with the same character.",
+      "correction": "Always choose a different character so the test actually alters the signature."
+    }
+  ]
+}

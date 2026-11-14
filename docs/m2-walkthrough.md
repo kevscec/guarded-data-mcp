@@ -1,6 +1,6 @@
 # M2: investigate quality under an approved contract
 
-First [import the synthetic example and configure stdio](m1-walkthrough.md). The examples use dataset ID `example`; use a fresh workspace or inspect its current revision before activation. The three MCP tools are read-only. Repair planning/application is not implemented yet.
+First [import the synthetic example and configure stdio](m1-walkthrough.md). The examples use dataset ID `example`; use a fresh workspace or inspect its current revision before activation. This guide covers the three read-only investigation tools. M3 adds [proposal preparation/review](m3-walkthrough.md); approval/application remains unimplemented.
 
 ## Inspect the initial contract
 
@@ -70,4 +70,4 @@ uv run python -m evals.runner
 uv run python -m evals.runner --mode legacy
 ```
 
-The [M2 report](evals/m2-results.json) records deterministic protocol checks, human activation from a separate process while the server is alive, and a full-state oracle for source bytes, every row, multiplicity and empty quarantine. Functional tests additionally cover conflicts, missing keys, allowed values, required fields, exact bounds, ordered dates, scalar precision, output budgets, migration and rollback failures. These are scripted evaluations; real-agent evaluation remains M7.
+The [historical M2 report](evals/m2-results.json) records deterministic protocol checks at commit `5fd5809`, human activation from a separate process while the server is alive, and a full-state oracle for source bytes, every row, multiplicity and empty quarantine. The runner now executes the expanded [M3 suite](evals/m3-results.json). Functional tests additionally cover conflicts, missing keys, allowed values, required fields, exact bounds, ordered dates, scalar precision, output budgets, migration and rollback failures. These are scripted evaluations; real-agent evaluation remains M7.

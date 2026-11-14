@@ -2,7 +2,7 @@
 
 Status: development sequence based on accepted ADRs 0001–0010. Q26–Q28 accepted the initial types/rules, full-version approach and input ceilings. Repository identity is accepted: `kevscec/guarded-data-mcp`, MIT, author Kevin Ceciliano Gamboa with GitHub noreply email. Auxiliary defaults in [TECHNICAL_SPEC.md](TECHNICAL_SPEC.md) remain explicit technical-validation work.
 
-Progress: M0–M2 are implemented: foundation, import/inspection, quality rules, bounded queries and human contract/mapping activation. CI runs behavioral tests and actual stdio evaluations on Windows and Ubuntu on every push. M3–M8 are not started. The public repository is [kevscec/guarded-data-mcp](https://github.com/kevscec/guarded-data-mcp).
+Progress: M0–M3 are implemented: foundation, import/inspection, quality investigation and immutable ordered repair proposals with exact manifests/previews. CI runs behavioral tests and actual stdio evaluations on Windows and Ubuntu on every push. M4–M8 are not started. The public repository is [kevscec/guarded-data-mcp](https://github.com/kevscec/guarded-data-mcp).
 
 The sequence uses deliverables and dependencies, not a calendar. Every functional milestone includes its own evaluation cases; the harness is not deferred to the end. The map below describes target responsibilities. M1 keeps these in focused modules (`domain.py`, `storage.py`, `codec.py`, `ingest.py`, `services.py`, `server.py`, `__main__.py`) rather than creating empty subpackages for future work.
 
@@ -83,11 +83,13 @@ Deliver: pure repair simulation for the three accepted families, combined-step c
 
 Acceptance:
 
-- [ ] Preview expected output matches a full-state oracle; active data remains unchanged.
-- [ ] Normalization-induced duplicates/conflicts are included in the combined outcome.
-- [ ] Missing-key records are not deduplicated together; conflicting values are not resolved by guessing.
-- [ ] Quarantine preserves every selected occurrence and reason; samples cannot silently broaden the affected set.
-- [ ] Timeout/incomplete analysis does not produce a reviewable successful plan.
+- [x] Preview expected output matches a full-state oracle; active data remains unchanged.
+- [x] Normalization-induced duplicates/conflicts are included in the combined outcome.
+- [x] Missing-key records are not deduplicated together; conflicting values are not resolved by guessing.
+- [x] Quarantine preserves every selected occurrence and reason; samples cannot silently broaden the affected set.
+- [x] Timeout/incomplete analysis does not produce a reviewable successful plan.
+
+Evidence: [M3 walkthrough](docs/m3-walkthrough.md), [deterministic results](docs/evals/m3-results.json), full preview/published-state oracles, failure/migration/quota/concurrency tests and both real stdio modes. No approval or data-application capability is enabled.
 
 ## M4 — Human approval and atomic application
 
@@ -163,4 +165,4 @@ Acceptance:
 
 ## Immediate next gate
 
-Execute M3: simulate the three repair families and persist immutable proposals with exact effects, without enabling application. Resolve combined-step semantics and mandatory postconditions before recording reviewable plans. No dates or elapsed-time targets define completion.
+Execute M4: define human approval issuance/revocation, then publish an exact approved proposal atomically with quarantine reasons, head revision, approval consumption and a replayable receipt. Fault/crash and competing-application checks are required before claiming application safety. No dates or elapsed-time targets define completion.

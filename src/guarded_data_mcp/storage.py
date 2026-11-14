@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from guarded_data_mcp.domain import DEFAULT_LIMITS, Contract, DomainError, Limits
+from guarded_data_mcp.domain import DEFAULT_LIMITS, Contract, DomainError, Limits, PlanDocument
 
 APPLICATION_ID = 0x47444D31
 # ADR-0012: metadata revisions never rewrite a version's physical import contract.
@@ -18,6 +18,11 @@ ACTIVATIONS = """CREATE TABLE IF NOT EXISTS activations (
     revision INTEGER NOT NULL CHECK(revision > 0),
     contract_sha256 TEXT NOT NULL REFERENCES contracts(sha256),
     created_at TEXT NOT NULL, PRIMARY KEY(dataset_id,revision)
+) STRICT"""
+PLANS = """CREATE TABLE IF NOT EXISTS plans (
+    plan_id TEXT PRIMARY KEY, dataset_id TEXT NOT NULL REFERENCES datasets(dataset_id),
+    document TEXT NOT NULL, active_preview BLOB NOT NULL, quarantine_preview BLOB NOT NULL,
+    created_at TEXT NOT NULL
 ) STRICT"""
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
@@ -51,13 +56,14 @@ class Store:
         self.limits = limits
 
     @contextmanager
-    def connection(self, *, write: bool = False):
+    def connection(self, *, write: bool = False, migrate: bool = True):
         connection = None
         try:
-            if write:
+            if write and migrate:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
             connection = sqlite3.connect(
-                self.path.as_uri() + ("?mode=rwc" if write else "?mode=ro"),
+                self.path.as_uri()
+                + ("?mode=rwc" if write and migrate else "?mode=rw" if write else "?mode=ro"),
                 uri=True,
                 timeout=self.limits.lock_seconds,
                 isolation_level=None,
@@ -68,7 +74,7 @@ class Store:
             application_id = connection.execute("PRAGMA application_id").fetchone()[0]
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             connection.rollback()
-            if write and application_id == 0 and version == 0:
+            if write and migrate and application_id == 0 and version == 0:
                 # Journal-mode lock upgrades can return BUSY immediately without invoking
                 # SQLite's busy handler when another initializer briefly holds a read lock.
                 # Retry only this pre-transaction setup, within the same bounded lock budget.
@@ -99,21 +105,30 @@ class Store:
                             connection.execute(statement)
                     connection.execute(f"PRAGMA application_id={APPLICATION_ID}")
                     connection.execute("PRAGMA user_version=1")
-                elif header not in ((APPLICATION_ID, 1), (APPLICATION_ID, 2)):
+                elif header not in ((APPLICATION_ID, 1), (APPLICATION_ID, 2), (APPLICATION_ID, 3)):
                     raise DomainError("STORAGE_INTEGRITY", "Unsupported workspace database format.")
                 connection.commit()
-            elif application_id != APPLICATION_ID or version not in (1, 2):
+            elif application_id != APPLICATION_ID or version not in (1, 2, 3):
                 raise DomainError("STORAGE_INTEGRITY", "Unsupported workspace database format.")
             if write:
                 connection.execute("PRAGMA synchronous=FULL")
                 connection.execute("BEGIN IMMEDIATE")
-                if connection.execute("PRAGMA user_version").fetchone()[0] == 1:
+                schema_version = connection.execute("PRAGMA user_version").fetchone()[0]
+                if not migrate and schema_version != 3:
+                    raise DomainError(
+                        "WORKSPACE_UPGRADE_REQUIRED",
+                        "Run the human CLI workspace-upgrade command before preparing plans.",
+                    )
+                if schema_version == 1:
                     connection.execute(ACTIVATIONS)
                     connection.execute("""INSERT INTO activations
                         SELECT d.dataset_id,1,v.contract_sha256,v.created_at
                         FROM datasets d JOIN versions v ON d.dataset_id=v.dataset_id
                         AND d.current_version=v.version""")
                     connection.execute("PRAGMA user_version=2")
+                if migrate and schema_version < 3:
+                    connection.execute(PLANS)
+                    connection.execute("PRAGMA user_version=3")
             else:
                 connection.execute("PRAGMA query_only=ON")
                 connection.execute("BEGIN")
@@ -163,11 +178,7 @@ class Store:
                 raise DomainError(
                     "DATASET_EXISTS", "Dataset ID is already registered; nothing changed."
                 )
-            used = connection.execute("""SELECT
-                (SELECT coalesce(sum(length(content)),0) FROM sources) +
-                (SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM contracts) +
-                (SELECT coalesce(sum(length(snapshot)+length(quarantine)),0) FROM versions)
-                """).fetchone()[0]
+            used = self.used_bytes(connection)
             source = connection.execute(
                 "SELECT content FROM sources WHERE sha256=?", (source_hash,)
             ).fetchone()
@@ -262,7 +273,7 @@ class Store:
             result["head_revision"] = 1
             result["active_document"] = result["document"]
             result["active_contract_sha256"] = contract.sha256
-            if connection.execute("PRAGMA user_version").fetchone()[0] == 2:
+            if connection.execute("PRAGMA user_version").fetchone()[0] >= 2:
                 activation = connection.execute(
                     """SELECT a.revision,a.contract_sha256,c.document
                     FROM activations a JOIN contracts c ON c.sha256=a.contract_sha256
@@ -302,11 +313,7 @@ class Store:
             if stored is not None and stored[0] != document:
                 raise DomainError("STORAGE_INTEGRITY", "Stored contract is damaged.")
             if stored is None:
-                used = connection.execute("""SELECT
-                    (SELECT coalesce(sum(length(content)),0) FROM sources) +
-                    (SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM contracts) +
-                    (SELECT coalesce(sum(length(snapshot)+length(quarantine)),0) FROM versions)
-                    """).fetchone()[0]
+                used = self.used_bytes(connection)
                 if used + len(document.encode()) > self.limits.quota_bytes:
                     raise DomainError("RESOURCE_LIMIT", "Contract would exceed retained quota.")
                 connection.execute(
@@ -318,3 +325,90 @@ class Store:
                 (dataset_id, revision, contract.sha256, datetime.now(UTC).isoformat()),
             )
             return revision
+
+    @staticmethod
+    def used_bytes(connection) -> int:
+        return connection.execute("""SELECT
+            (SELECT coalesce(sum(length(content)),0) FROM sources) +
+            (SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM contracts) +
+            (SELECT coalesce(sum(length(snapshot)+length(quarantine)),0) FROM versions) +
+            (SELECT coalesce(sum(length(CAST(document AS BLOB)) + length(active_preview)
+                + length(quarantine_preview)),0) FROM plans)
+            """).fetchone()[0]
+
+    def upgrade(self) -> dict:
+        with self.connection(write=True) as connection:
+            return {
+                "status": "ok",
+                "workspace_schema": connection.execute("PRAGMA user_version").fetchone()[0],
+            }
+
+    def save_plan(
+        self, plan: PlanDocument, active: bytes, quarantine: bytes, deadline: float
+    ) -> None:
+        from guarded_data_mcp.quality import deadline_check
+
+        document = plan.canonical_json()
+        with self.connection(write=True, migrate=False) as connection:
+            deadline_check(deadline)
+            binding = plan.binding
+            current = connection.execute(
+                """SELECT d.current_version,v.snapshot_sha256,v.snapshot,
+                v.quarantine,a.revision,a.contract_sha256 FROM datasets d JOIN versions v
+                ON v.dataset_id=d.dataset_id AND v.version=d.current_version
+                JOIN activations a ON a.dataset_id=d.dataset_id WHERE d.dataset_id=?
+                ORDER BY a.revision DESC LIMIT 1""",
+                (binding.dataset_id,),
+            ).fetchone()
+            if current is None or (
+                current["current_version"],
+                current["revision"],
+                current["contract_sha256"],
+                current["snapshot_sha256"],
+                hashlib.sha256(current["quarantine"]).hexdigest(),
+            ) != (
+                binding.version,
+                binding.head_revision,
+                binding.contract_sha256,
+                binding.snapshot_sha256,
+                binding.quarantine_sha256,
+            ):
+                raise DomainError(
+                    "STALE_REVISION", "Dataset state changed during plan preparation."
+                )
+            if hashlib.sha256(current["snapshot"]).hexdigest() != binding.snapshot_sha256:
+                raise DomainError("STORAGE_INTEGRITY", "Base snapshot is damaged.")
+            existing = connection.execute(
+                "SELECT document,active_preview,quarantine_preview FROM plans WHERE plan_id=?",
+                (plan.plan_id,),
+            ).fetchone()
+            if existing is not None:
+                if tuple(existing) != (document, active, quarantine):
+                    raise DomainError("STORAGE_INTEGRITY", "Persisted plan content is damaged.")
+                return
+            additional = len(document.encode()) + len(active) + len(quarantine)
+            if self.used_bytes(connection) + additional > self.limits.quota_bytes:
+                raise DomainError("RESOURCE_LIMIT", "Plan would exceed retained-content quota.")
+            connection.execute(
+                "INSERT INTO plans VALUES (?,?,?,?,?,?)",
+                (
+                    plan.plan_id,
+                    binding.dataset_id,
+                    document,
+                    active,
+                    quarantine,
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+            deadline_check(deadline)
+
+    def read_plan(self, plan_id: str) -> dict:
+        if not self.path.exists():
+            raise DomainError("UNKNOWN_PLAN", "Plan is not registered.")
+        with self.connection() as connection:
+            if connection.execute("PRAGMA user_version").fetchone()[0] < 3:
+                raise DomainError("UNKNOWN_PLAN", "No plans exist in this workspace format.")
+            row = connection.execute("SELECT * FROM plans WHERE plan_id=?", (plan_id,)).fetchone()
+            if row is None:
+                raise DomainError("UNKNOWN_PLAN", "Plan is not registered.")
+            return dict(row)

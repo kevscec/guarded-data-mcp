@@ -46,9 +46,14 @@ def main() -> int:
     activate.add_argument("--approve-contract", required=True, metavar="SHA256")
     activate.add_argument("--expected-revision", required=True, type=int)
     commands.add_parser("list")
+    commands.add_parser("workspace-upgrade", help="Human-only transactional workspace migration")
+    review = commands.add_parser(
+        "review-plan", help="Read full immutable request/contract/manifest"
+    )
+    review.add_argument("plan_id")
     inspect = commands.add_parser("inspect")
     inspect.add_argument("dataset_id")
-    commands.add_parser("serve", help="Run the read-only MCP server on stdio")
+    commands.add_parser("serve", help="Run the investigation/proposal MCP server on stdio")
     args = parser.parse_args()
     try:
         try:
@@ -74,6 +79,10 @@ def main() -> int:
             ).model_dump(mode="json")
         elif args.command == "list":
             payload = service.list_datasets().model_dump(mode="json")
+        elif args.command == "workspace-upgrade":
+            payload = service.store.upgrade()
+        elif args.command == "review-plan":
+            payload = service.review_plan(args.plan_id)
         elif args.command == "activate-contract":
             payload = service.activate_contract(
                 args.dataset_id,

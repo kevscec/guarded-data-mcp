@@ -1,4 +1,4 @@
-"""Import regression plus M2 investigation: real stdio transport and full-state oracle."""
+"""Deterministic import, investigation and immutable proposal evaluations over real stdio."""
 
 import argparse
 import asyncio
@@ -29,6 +29,18 @@ def full_state_oracle(workspace: Path) -> None:
     """Read physical state independently of the application's snapshot decoder."""
     expected = json.loads((CASES / "expected.json").read_text())
     with closing(sqlite3.connect(workspace / "guarded-data.sqlite3")) as connection:
+        require(
+            connection.execute("SELECT count(*) FROM versions").fetchone()[0] == 1,
+            "Investigation/proposal unexpectedly published a version",
+        )
+        require(
+            connection.execute("SELECT current_version FROM datasets").fetchall() == [(1,)],
+            "Published head changed",
+        )
+        require(
+            connection.execute("SELECT count(*) FROM sources").fetchone()[0] == 1,
+            "Unexpected extra source",
+        )
         source = connection.execute("SELECT content,sha256 FROM sources").fetchone()
         require(source[0] == (CASES / "source.csv").read_bytes(), "Source bytes changed")
         require(hashlib.sha256(source[0]).hexdigest() == source[1], "Source hash mismatch")
@@ -61,12 +73,16 @@ async def protocol_cases(workspace: Path, *, mode: str = "auto") -> tuple[list[s
         protocol_version = str(client.protocol_version)
         tools = (await client.list_tools()).tools
         require(
-            {tool.name for tool in tools} == {"list_datasets", "inspect_dataset", "query_records"},
+            {tool.name for tool in tools}
+            == {"list_datasets", "inspect_dataset", "query_records", "prepare_plan", "get_plan"},
             "Unexpected privilege/tool exposed",
         )
         schemas = {tool.name: tool.output_schema for tool in tools}
         require(all(schemas.values()), "Missing output schemas")
-        require(all(tool.annotations.read_only_hint for tool in tools), "Missing read-only hints")
+        require(
+            all(tool.annotations.read_only_hint == (tool.name != "prepare_plan") for tool in tools),
+            "Incorrect write/read hints",
+        )
         passed.append("tool_surface")
 
         listing = await client.call_tool("list_datasets", {})
@@ -166,20 +182,7 @@ async def protocol_cases(workspace: Path, *, mode: str = "auto") -> tuple[list[s
         passed.append("typed_conjunction")
 
         # Trusted controller uses the human CLI while the same MCP subprocess stays alive.
-        document = json.loads((CASES / "contract.json").read_text())
-        document.update(
-            schema_version=2,
-            rules=[
-                {
-                    "rule_id": "categories",
-                    "explanation": "Only reviewed categories",
-                    "kind": "allowed_values",
-                    "column": "category",
-                    "values": ["open", "closed"],
-                }
-            ],
-        )
-        updated = Contract.model_validate(document)
+        updated = Contract.model_validate_json((CASES / "quality-contract.json").read_bytes())
         path = workspace.parent / "reviewed-contract.json"
         path.write_text(updated.canonical_json(), encoding="utf-8")
         activated = subprocess.run(
@@ -234,6 +237,115 @@ async def protocol_cases(workspace: Path, *, mode: str = "auto") -> tuple[list[s
         )
         passed.append("refusal:old_finding")
 
+        arguments = {
+            "dataset_id": "fixture",
+            "expected_revision": 2,
+            "request": {
+                "steps": [
+                    {"kind": "deduplicate"},
+                    {
+                        "kind": "quarantine",
+                        "rule_id": "categories",
+                        "finding_kind": "allowed_values",
+                        "row_ids": [4],
+                    },
+                ]
+            },
+        }
+        proposed = await client.call_tool("prepare_plan", arguments)
+        require(not proposed.is_error, "Proposal preparation failed")
+        proposal = proposed.structured_content
+        validate(proposal, schemas["prepare_plan"])
+        require(
+            proposal["input_row_count"] == 4
+            and proposal["output_row_count"] == 2
+            and proposal["quarantine_row_count"] == 1
+            and not proposal["can_apply"]
+            and proposal["approval_status"] == "not_supported",
+            "Proposal overstated execution",
+        )
+        passed.append("immutable_proposal_without_approval")
+        review = await client.call_tool("get_plan", {"plan_id": proposal["plan_id"], "limit": 1})
+        require(not review.is_error, "Proposal review failed")
+        validate(review.structured_content, schemas["get_plan"])
+        require(
+            review.structured_content["effects"][0]["row_id"] == 2
+            and review.structured_content["next_after_effect"] == 1,
+            "First effect page mismatch",
+        )
+        following = await client.call_tool(
+            "get_plan", {"plan_id": proposal["plan_id"], "limit": 1, "after_effect": 1}
+        )
+        require(
+            not following.is_error
+            and following.structured_content["effects"][0]["row_id"] == 4
+            and following.structured_content["next_after_effect"] is None,
+            "Lost manifest effect",
+        )
+        passed.append("complete_paginated_manifest")
+        retry = await client.call_tool("prepare_plan", arguments)
+        require(
+            not retry.is_error and retry.structured_content["plan_id"] == proposal["plan_id"],
+            "Identical preparation did not recover durable proposal",
+        )
+        passed.append("idempotent_preparation")
+        normalized = await client.call_tool(
+            "prepare_plan",
+            {
+                "dataset_id": "fixture",
+                "expected_revision": 2,
+                "request": {"steps": [{"kind": "normalize", "mapping_id": "example-equivalence"}]},
+            },
+        )
+        require(
+            not normalized.is_error and normalized.structured_content["effect_count"] == 1,
+            "Approved normalization simulation failed",
+        )
+        passed.append("approved_normalization_preview")
+        invalid = await client.call_tool(
+            "prepare_plan",
+            {
+                "dataset_id": "fixture",
+                "expected_revision": 2,
+                "request": {"steps": [{"kind": "eval", "expression": "approve()"}]},
+            },
+        )
+        require(invalid.is_error, "Executable plan kind accepted")
+        passed.append("refusal:executable_step_schema")
+
+        changed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "guarded_data_mcp",
+                "--workspace",
+                str(workspace),
+                "activate-contract",
+                "fixture",
+                "--contract",
+                str(path),
+                "--approve-contract",
+                updated.sha256,
+                "--expected-revision",
+                "2",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        require(changed.returncode == 0, "Second human activation failed")
+        old = await client.call_tool("get_plan", {"plan_id": proposal["plan_id"]})
+        refused = await client.call_tool("prepare_plan", arguments)
+        require(
+            not old.is_error
+            and old.structured_content["state"] == "stale"
+            and old.structured_content["effects"] == proposal["effects"]
+            and refused.is_error
+            and refused.structured_content["code"] == "STALE_REVISION",
+            "Stale proposal mishandled",
+        )
+        passed.append("stale_proposal_preserves_review")
+
         for tool, arguments, code in [
             ("inspect_dataset", {"dataset_id": "missing"}, "UNKNOWN_DATASET"),
             ("inspect_dataset", {"dataset_id": "../../private"}, "INVALID_INPUT"),
@@ -243,6 +355,7 @@ async def protocol_cases(workspace: Path, *, mode: str = "auto") -> tuple[list[s
                 "UNKNOWN_DATASET_VERSION",
             ),
             ("list_datasets", {"limit": 101}, "INVALID_INPUT"),
+            ("get_plan", {"plan_id": "plan_" + "0" * 64}, "UNKNOWN_PLAN"),
         ]:
             failure = await client.call_tool(tool, arguments)
             require(failure.is_error, f"Expected refusal: {arguments}")
@@ -251,7 +364,70 @@ async def protocol_cases(workspace: Path, *, mode: str = "auto") -> tuple[list[s
         invalid_type = await client.call_tool("list_datasets", {"limit": True})
         require(invalid_type.is_error, "Boolean was silently accepted as an integer limit")
         passed.append("refusal:argument_type")
+    async with Client(parameters, mode=mode, read_timeout_seconds=20) as restarted:
+        recovered = await restarted.call_tool("get_plan", {"plan_id": proposal["plan_id"]})
+        require(
+            not recovered.is_error
+            and recovered.structured_content["effects"] == proposal["effects"],
+            "Server restart lost or changed proposal",
+        )
+        passed.append("restart_durable_proposal")
     return passed, protocol_version
+
+
+def preview_oracle(workspace: Path) -> None:
+    expected = json.loads((CASES / "expected.json").read_text())["rows"]
+    with closing(sqlite3.connect(workspace / "guarded-data.sqlite3")) as connection:
+        rows = connection.execute(
+            "SELECT plan_id,document,active_preview,quarantine_preview FROM plans"
+        ).fetchall()
+        require(len(rows) == 2, "Unexpected proposal count")
+        for plan_id, text, active, quarantine in rows:
+            document = json.loads(text)
+            canonical = json.dumps(
+                document, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+            )
+            require(
+                plan_id == "plan_" + hashlib.sha256(canonical.encode()).hexdigest(),
+                "Plan checksum mismatch",
+            )
+            require(
+                hashlib.sha256(active).hexdigest() == document["active_preview_sha256"],
+                "Preview hash mismatch",
+            )
+            require(
+                hashlib.sha256(quarantine).hexdigest() == document["quarantine_preview_sha256"],
+                "Quarantine hash mismatch",
+            )
+            actual = pa.ipc.open_file(pa.BufferReader(active)).read_all().to_pylist()
+            separated = pa.ipc.open_file(pa.BufferReader(quarantine)).read_all().to_pylist()
+            for row in actual + separated:
+                row["amount"] = str(row["amount"])
+            if document["request"]["steps"][0]["kind"] == "deduplicate":
+                require(
+                    actual
+                    == [{**expected[0], "_gdm_row_id": 1}, {**expected[2], "_gdm_row_id": 3}],
+                    "Complete dedup/quarantine preview mismatch",
+                )
+                require(
+                    separated == [{**expected[3], "_gdm_row_id": 4}], "Quarantine contents changed"
+                )
+                require(
+                    [(e["kind"], e["row_id"]) for e in document["effects"]]
+                    == [("deduplicate", 2), ("quarantine", 4)],
+                    "Affected occurrence manifest mismatch",
+                )
+                require(
+                    document["effects"][1]["reason"]
+                    == "This synthetic example permits only open and closed categories.",
+                    "Quarantine reason mismatch",
+                )
+            else:
+                wanted = [{**row, "_gdm_row_id": i} for i, row in enumerate(expected, 1)]
+                wanted[3]["category"] = "open"
+                require(
+                    actual == wanted and not separated, "Complete normalization preview mismatch"
+                )
 
 
 def run(mode: str = "auto") -> dict:
@@ -284,8 +460,10 @@ def run(mode: str = "auto") -> dict:
         cases, protocol_version = asyncio.run(protocol_cases(workspace, mode=mode))
         passed = ["full_state_and_source_oracle", *cases]
         full_state_oracle(workspace)
+        preview_oracle(workspace)
+        passed.append("independent_full_preview_oracle")
         return {
-            "suite": "m2-deterministic",
+            "suite": "m3-deterministic",
             "mode": mode,
             "protocol_version": protocol_version,
             "status": "passed",

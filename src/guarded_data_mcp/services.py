@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import time
 from pathlib import Path
@@ -22,12 +23,18 @@ from guarded_data_mcp.domain import (
     DatasetSummary,
     DomainError,
     Limits,
+    PlanBinding,
+    PlanDocument,
+    PlanPage,
+    PlanRequest,
     Predicate,
     Record,
     RecordPage,
+    StepSummary,
     validate_dataset_id,
 )
 from guarded_data_mcp.ingest import decode_source, read_source
+from guarded_data_mcp.planning import simulate
 from guarded_data_mcp.quality import Analysis, deadline_check, parse_value, wire_value
 from guarded_data_mcp.storage import Store
 
@@ -37,6 +44,145 @@ class DatasetService:
         self.limits = limits
         self.store = Store(workspace, limits)
         self._cursor_key = secrets.token_bytes(32)
+
+    @staticmethod
+    def _plan_binding(dataset_id: str, record: dict, contract: Contract) -> PlanBinding:
+        return PlanBinding(
+            dataset_id=dataset_id,
+            version=record["version"],
+            head_revision=record["head_revision"],
+            contract_sha256=contract.sha256,
+            snapshot_sha256=record["snapshot_sha256"],
+            quarantine_sha256=hashlib.sha256(record["quarantine"]).hexdigest(),
+        )
+
+    def prepare_plan(
+        self, dataset_id: str, request: PlanRequest, expected_revision: int
+    ) -> PlanPage:
+        deadline = time.monotonic() + 30
+        if (
+            not isinstance(request, PlanRequest)
+            or type(expected_revision) is not int
+            or expected_revision < 1
+        ):
+            raise DomainError(
+                "INVALID_INPUT", "Supply a structured plan and positive reviewed revision."
+            )
+        record, contract, table = self._load(dataset_id)
+        if record["head_revision"] != expected_revision:
+            raise DomainError("STALE_REVISION", "Investigated dataset revision has changed.")
+        binding = self._plan_binding(dataset_id, record, contract)
+        quarantine = decode_snapshot(record["quarantine"], binding.quarantine_sha256, contract, 0)
+        document, active, quarantined = simulate(
+            table, quarantine, contract, binding, request, self.limits, deadline
+        )
+        response = self._plan_page(document, stale=False, after_effect=0, limit=50)
+        self.store.save_plan(document, active, quarantined, deadline)
+        return response
+
+    def _read_plan(self, plan_id: str) -> PlanDocument:
+        if not isinstance(plan_id, str) or not re.fullmatch(r"plan_[0-9a-f]{64}", plan_id):
+            raise DomainError(
+                "INVALID_INPUT", "Supply a registered plan ID, not a path or expression."
+            )
+        stored = self.store.read_plan(plan_id)
+        try:
+            document = PlanDocument.model_validate_json(stored["document"])
+            if document.plan_id != plan_id or document.binding.dataset_id != stored["dataset_id"]:
+                raise ValueError("Plan checksum mismatch")
+            if document.contract.sha256 != document.binding.contract_sha256:
+                raise ValueError("Frozen contract checksum mismatch")
+            if [e.effect_id for e in document.effects] != list(range(1, len(document.effects) + 1)):
+                raise ValueError("Manifest sequence mismatch")
+        except (ValidationError, ValueError) as exc:
+            raise DomainError("STORAGE_INTEGRITY", "Stored plan failed integrity checks.") from exc
+        decode_snapshot(
+            stored["active_preview"],
+            document.active_preview_sha256,
+            document.contract,
+            document.output_row_count,
+        )
+        decode_snapshot(
+            stored["quarantine_preview"],
+            document.quarantine_preview_sha256,
+            document.contract,
+            document.quarantine_row_count,
+        )
+        return document
+
+    def review_plan(self, plan_id: str) -> dict:
+        """Human CLI: complete frozen contract, request and occurrence manifest."""
+        return self._read_plan(plan_id).model_dump(mode="json")
+
+    def get_plan(self, plan_id: str, after_effect: int = 0, limit: int = 50) -> PlanPage:
+        if (
+            type(after_effect) is not int
+            or after_effect < 0
+            or type(limit) is not int
+            or not 1 <= limit <= 100
+        ):
+            raise DomainError("INVALID_INPUT", "Use a nonnegative effect position and limit 1–100.")
+        document = self._read_plan(plan_id)
+        record, contract, _ = self._load(document.binding.dataset_id)
+        stale = (
+            self._plan_binding(document.binding.dataset_id, record, contract) != document.binding
+        )
+        return self._plan_page(document, stale, after_effect, limit)
+
+    def _plan_page(
+        self, document: PlanDocument, stale: bool, after_effect: int, limit: int
+    ) -> PlanPage:
+        if after_effect > len(document.effects):
+            raise DomainError("INVALID_INPUT", "Effect position exceeds the immutable manifest.")
+        steps = []
+        for index, step in enumerate(document.request.steps, start=1):
+            values = step.model_dump()
+            rows = values.pop("row_ids", None)
+            steps.append(
+                StepSummary(
+                    step_index=index,
+                    **values,
+                    selected_row_count=len(rows) if rows is not None else None,
+                )
+            )
+        page = PlanPage(
+            plan_id=document.plan_id,
+            binding=document.binding,
+            state="stale" if stale else "prepared",
+            steps=steps,
+            input_row_count=document.input_row_count,
+            output_row_count=document.output_row_count,
+            quarantine_row_count=document.quarantine_row_count,
+            active_preview_sha256=document.active_preview_sha256,
+            quarantine_preview_sha256=document.quarantine_preview_sha256,
+            findings_before=document.findings_before,
+            predicted_findings=document.predicted_findings,
+            effect_count=len(document.effects),
+            effects=[],
+            evidence_truncated=False,
+        )
+        size = len(page.model_dump_json().encode()) + 1024
+        effects = []
+        for effect in document.effects[after_effect : after_effect + limit]:
+            extra = len(effect.model_dump_json().encode())
+            if size + extra > 256 * 1024:
+                if not effects:
+                    raise DomainError(
+                        "RESOURCE_LIMIT", "An effect exceeds the bounded review payload."
+                    )
+                break
+            effects.append(effect)
+            size += extra
+        more = after_effect + len(effects) < len(document.effects)
+        return self._bounded(
+            page.model_copy(
+                update={
+                    "effects": effects,
+                    "evidence_truncated": more,
+                    "next_after_effect": effects[-1].effect_id if more else None,
+                }
+            )
+        )
 
     def import_file(
         self,

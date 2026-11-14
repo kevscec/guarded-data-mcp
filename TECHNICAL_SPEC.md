@@ -1,6 +1,6 @@
 # Technical specification — controlled data repair MCP
 
-Status: M1–M2 implemented under ADRs 0001–0012: import/inspection, full-scan closed rules, bounded typed queries and human contract/mapping activation. Q26–Q28 accepted the rule/type families and input envelope. Repair schemas, approval execution and real-agent evaluation remain future work.
+Status: M1–M3 implemented under ADRs 0001–0013: import/inspection, quality investigation, human contract/mapping activation and immutable ordered repair proposals. Q26–Q28 accepted the rule/type families and input envelope. Approval execution, restoration and real-agent evaluation remain future work.
 
 ## Approved architecture
 
@@ -54,6 +54,20 @@ M2 appends activations transactionally, with an expected-revision precondition a
 
 Store immutable plans and separate approval/execution records. Human review presents the exact plan hash, scope, counts, examples and unresolved findings. CLI confirmation records approval only after revalidating the reviewed revision. Allow explicit revocation before application. No human interaction occurs inside a database write transaction.
 
+## Implemented M3 proposal semantics
+
+`prepare_plan(dataset_id, request, expected_revision)` operates only on the investigated current version. `request.steps` contains 1–20 discriminated closed operations: `normalize(mapping_id, allow_key_change=false)`, `deduplicate`, and `quarantine(rule_id, finding_kind, row_ids)`. Unknown fields, expressions and operation kinds are refused. Quarantine IDs must be positive, distinct and explicit; they are canonically sorted and must still violate that requirement at the selected ordered step. Normalization uses approved typed maps once simultaneously per step, skips nulls, verifies physical representation and requires explicit key-change intent. Deduplication keeps the smallest occurrence ID only in wholly identical complete-key groups.
+
+Simulation records typed before/after values for each normalization, removed occurrence/survivor pairs for deduplication and rule/finding/reason for each quarantined occurrence. Quarantine previews preserve full typed values at that step. Intermediate defects may be resolved by later steps. Mandatory final postconditions preserve types and occurrence conservation and reject new rule violations: each final `(rule ID, kind)` occurrence set must be a subset of the initial set. Existing unresolved findings remain explicit; no-op whole plans are refused. This does not establish that approved business rules are correct.
+
+SQLite schema v3 adds immutable canonical plan documents and complete Arrow active/quarantine preview blobs. Plan IDs are content hashes of the entire document, including frozen contract/maps, base version/revision/hashes, request, exact effects and full findings. Timestamps are outside the hash. Repeated preparation at identical state recovers the same ID; a transaction rechecks bound state and quota before inserting. Failures roll back the proposal. MCP never migrates an old workspace: human imports/activations or `workspace-upgrade` do so transactionally. Source/versions/head/quarantine remain unchanged during preparation.
+
+`get_plan(plan_id, after_effect=0, limit=50)` returns the immutable summary and exact effect pages (100 effects/256 KiB compact structured payload maximum), with `next_after_effect` and explicit truncation. Step summaries contain explicit selection counts; all selected IDs are represented in paginated effects. Human `review-plan` returns the full frozen document, including contract and original request. Reads verify document and preview hashes/types. After a changed head/contract, review returns `stale` without rewriting the document. Restart does not invalidate plan IDs or manifest positions. Predicted findings reference simulation, not published data. Approval/execution are explicitly unavailable in M3.
+
+Each plan is bounded to 100,000 effect entries and a 16 MiB canonical document; complete previews count against the existing retained-content quota alongside sources, contracts and versions. Initial M3 workspaces have empty quarantine; preservation of previously published quarantine and reason history enters with M4. See [ADR-0013](docs/adr/0013-persist-exact-simulated-proposals.md) and the [M3 walkthrough](docs/m3-walkthrough.md).
+
+## Proposed M4 publication lifecycle
+
 Suggested publication sequence:
 
 1. Obtain a bounded write transaction.
@@ -106,7 +120,7 @@ The server opens no network port. Logs go to stderr and exclude raw record conte
 
 ## Remaining decisions
 
-M1–M2 settle IPC encoding, scalar codecs, rule/query semantics, contract activation and pinned SDK auto/legacy stdio compatibility. See the [import walkthrough](docs/m1-walkthrough.md) for exact CSV/type policies and native-decoder limitations. Next specify combined repair simulation and immutable plan persistence, then approval/publication. Choose the real-agent adapter and its measured-suite configuration before evaluating it. Repository identity is `kevscec/guarded-data-mcp`, MIT code license, author Kevin Ceciliano Gamboa using GitHub noreply. Configure identity locally for this repository only.
+M1–M3 settle IPC encoding, scalar codecs, quality investigation, immutable plan simulation/persistence and pinned SDK auto/legacy stdio compatibility. See the [import walkthrough](docs/m1-walkthrough.md) for exact CSV/type policies and native-decoder limitations. Next specify approval issuance/revocation and atomic publication with durable reason history/receipts. Choose the real-agent adapter and its measured-suite configuration before evaluating it. Repository identity is `kevscec/guarded-data-mcp`, MIT code license, author Kevin Ceciliano Gamboa using GitHub noreply. Configure identity locally for this repository only.
 
 ## References
 

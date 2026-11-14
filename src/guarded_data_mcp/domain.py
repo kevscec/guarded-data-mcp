@@ -4,9 +4,9 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DATASET_ID = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 
@@ -233,3 +233,128 @@ class RecordPage(Model):
     analysis_complete: Literal[True] = True
     evidence_truncated: bool
     next_cursor: str | None = None
+
+
+class DeduplicateStep(Model):
+    kind: Literal["deduplicate"]
+
+
+class NormalizeStep(Model):
+    kind: Literal["normalize"]
+    mapping_id: str = Field(min_length=1, max_length=64)
+    allow_key_change: bool = False
+
+
+class QuarantineStep(Model):
+    kind: Literal["quarantine"]
+    rule_id: str = Field(min_length=1, max_length=160)
+    finding_kind: Literal[
+        "required",
+        "allowed_values",
+        "bounds",
+        "ordered",
+        "missing_key",
+        "exact_duplicate",
+        "conflicting_key",
+    ]
+    row_ids: list[int] = Field(min_length=1, max_length=100_000)
+
+    @field_validator("row_ids")
+    @classmethod
+    def distinct_occurrences(cls, values: list[int]) -> list[int]:
+        if any(v < 1 for v in values) or len(set(values)) != len(values):
+            raise ValueError("Occurrence IDs must be positive and distinct")
+        return sorted(values)
+
+
+RepairStep = Annotated[
+    DeduplicateStep | NormalizeStep | QuarantineStep, Field(discriminator="kind")
+]
+
+
+class PlanRequest(Model):
+    steps: list[RepairStep] = Field(min_length=1, max_length=20)
+
+
+class PlanBinding(Model):
+    dataset_id: str
+    version: int
+    head_revision: int
+    contract_sha256: str
+    snapshot_sha256: str
+    quarantine_sha256: str
+
+
+class Effect(Model):
+    effect_id: int
+    step_index: int
+    kind: Literal["normalize", "deduplicate", "quarantine"]
+    row_id: int
+    column: str | None = None
+    before: Cell | None = None
+    after: Cell | None = None
+    survivor_row_id: int | None = None
+    rule_id: str | None = None
+    finding_kind: str | None = None
+    finding_id: str | None = None
+    reason: str | None = None
+
+
+class PlanDocument(Model):
+    schema_version: Literal[1] = 1
+    binding: PlanBinding
+    contract: Contract
+    request: PlanRequest
+    input_row_count: int
+    output_row_count: int
+    quarantine_row_count: int
+    active_preview_sha256: str
+    quarantine_preview_sha256: str
+    findings_before: list[Finding]
+    predicted_findings: list[Finding]
+    effects: list[Effect] = Field(max_length=100_000)
+    analysis_complete: Literal[True] = True
+    postconditions_passed: Literal[True] = True
+
+    def canonical_json(self) -> str:
+        return json.dumps(
+            self.model_dump(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+
+    @property
+    def plan_id(self) -> str:
+        return "plan_" + hashlib.sha256(self.canonical_json().encode()).hexdigest()
+
+
+class StepSummary(Model):
+    step_index: int
+    kind: str
+    mapping_id: str | None = None
+    allow_key_change: bool = False
+    rule_id: str | None = None
+    finding_kind: str | None = None
+    selected_row_count: int | None = None
+
+
+class PlanPage(Model):
+    status: Literal["ok"] = "ok"
+    plan_id: str
+    binding: PlanBinding
+    state: Literal["prepared", "stale"]
+    approval_status: Literal["not_supported"] = "not_supported"
+    execution_status: Literal["not_enabled"] = "not_enabled"
+    can_apply: Literal[False] = False
+    steps: list[StepSummary]
+    input_row_count: int
+    output_row_count: int
+    quarantine_row_count: int
+    active_preview_sha256: str
+    quarantine_preview_sha256: str
+    findings_before: list[Finding]
+    predicted_findings: list[Finding]
+    analysis_complete: Literal[True] = True
+    postconditions_passed: Literal[True] = True
+    effect_count: int
+    effects: list[Effect]
+    evidence_truncated: bool
+    next_after_effect: int | None = None

@@ -131,7 +131,7 @@ def test_cursor_binds_query_state_session_and_signature(tmp_path):
         service.query_records,
         "fixture",
         limit=2,
-        cursor="A" + page.next_cursor[1:],
+        cursor=("B" if page.next_cursor.startswith("A") else "A") + page.next_cursor[1:],
     )
     refusal(
         "INVALID_CURSOR",

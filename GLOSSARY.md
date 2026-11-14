@@ -20,6 +20,18 @@ _Avoid_: Source dataset.
 A specific proposed set of changes to a working copy, accompanied by its expected impact.
 _Avoid_: Approval.
 
+**Effect manifest**:
+The complete ordered account of the occurrences a repair plan would change, deduplicate or quarantine, including their exact changes and quarantine reasons. A page or sample of it is not the whole affected set.
+_Avoid_: Preview sample, general repair instruction.
+
+**Predicted finding**:
+A quality finding in a plan's simulated final dataset. It describes a proposed result rather than a published repair.
+_Avoid_: Executed result.
+
+**Stale plan**:
+A recorded proposal whose reviewed data or contract state is no longer current. Its original meaning remains available for review, but it does not authorize work against the changed state.
+_Avoid_: Updated plan, reusable approval.
+
 **Approval**:
 A human authorization to apply one exact repair plan; preparing a plan does not authorize its execution.
 _Avoid_: Plan, agent confirmation.

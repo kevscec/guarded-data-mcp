@@ -5,6 +5,8 @@ Read [README.md](README.md), the [ADR index](docs/adr/README.md), the [technical
 ## Boundaries
 
 - Keep domain semantics independent of the MCP SDK. CLI and MCP call the same services with different exposed capabilities.
+- M3 plans freeze their contract, ordered steps, exact manifest and typed previews. Preserve the final non-regression/conservation checks; individual intermediate steps may create defects only when later steps resolve them. Preparation writes proposals, never published data. MCP preparation refuses old workspace formats instead of migrating them.
+- Preserve schema-v1 plan canonical serialization when extending the protocol; introduce a versioned format rather than silently rehashing existing proposals. Approval/execution state belongs in separate records.
 - SQLite owns authoritative state and transaction publication. PyArrow handles CSV/Parquet interchange.
 - The agent has no approval or contract-activation tool. Plans are immutable and approvals bind the reviewed state.
 - Preserve original records, multiplicity, logical types, quarantine reasons and operation history. Never silently coerce unsupported values or report a bounded sample as full validation.
