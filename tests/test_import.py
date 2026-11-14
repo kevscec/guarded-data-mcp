@@ -325,7 +325,8 @@ def test_empty_parquet_and_nested_parquet_rejection(tmp_path):
     assert error.value.code == "SCHEMA_MISMATCH"
 
 
-def test_two_human_cli_processes_can_register_without_lost_updates(tmp_path):
+@pytest.mark.parametrize("attempt", range(5))
+def test_two_human_cli_processes_can_register_without_lost_updates(tmp_path, attempt):
     specification = contract({"name": "id", "dtype": "text"})
     path = tmp_path / "contract.json"
     path.write_text(specification.canonical_json(), encoding="utf-8")

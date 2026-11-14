@@ -2,6 +2,7 @@
 
 import hashlib
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -68,7 +69,21 @@ class Store:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             connection.rollback()
             if write and application_id == 0 and version == 0:
-                connection.execute("PRAGMA journal_mode=WAL")
+                # Journal-mode lock upgrades can return BUSY immediately without invoking
+                # SQLite's busy handler when another initializer briefly holds a read lock.
+                # Retry only this pre-transaction setup, within the same bounded lock budget.
+                deadline = time.monotonic() + self.limits.lock_seconds
+                while True:
+                    try:
+                        connection.execute("PRAGMA journal_mode=WAL")
+                        break
+                    except sqlite3.OperationalError as exc:
+                        if (getattr(exc, "sqlite_errorcode", 0) & 0xFF) not in (
+                            sqlite3.SQLITE_BUSY,
+                            sqlite3.SQLITE_LOCKED,
+                        ) or time.monotonic() >= deadline:
+                            raise
+                        time.sleep(min(0.01, max(0, deadline - time.monotonic())))
                 connection.execute("PRAGMA synchronous=FULL")
                 connection.execute("BEGIN IMMEDIATE")
                 # Another CLI may have initialized while this connection waited for the lock.

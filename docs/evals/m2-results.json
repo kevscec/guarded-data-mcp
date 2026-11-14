@@ -66,5 +66,17 @@
       ],
       "real_agent": false
     }
+  ],
+  "observed_failures": [
+    {
+      "revision": "c8d6bbf01b6be5fef242a37e2fe52379dfb4a474",
+      "ci_run": "https://github.com/kevscec/guarded-data-mcp/actions/runs/43557060567",
+      "platforms": [
+        "ubuntu-24.04",
+        "windows-2025"
+      ],
+      "failure": "Two simultaneous fresh-workspace imports intermittently returned STORAGE_BUSY during WAL initialization.",
+      "correction": "Bounded retry of pre-transaction journal-mode setup; repeat the real two-process regression five times per platform."
+    }
   ]
 }
