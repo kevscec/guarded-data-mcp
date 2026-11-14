@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "guarded-data-mcp"
+version = "0.1.0a0"
+description = "Controlled local data repair through human-approved MCP plans."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "MIT"
+authors = [{name = "Kevin Ceciliano Gamboa"}]
+dependencies = [
+    "mcp==2.3.0",
+    "pyarrow==26.0.1",
+    "pydantic>=2.11,<3",
+]
+
+[project.urls]
+Repository = "https://github.com/kevscec/guarded-data-mcp"
+Issues = "https://github.com/kevscec/guarded-data-mcp/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.11,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/guarded_data_mcp"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
